@@ -26,6 +26,8 @@ import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRa
 import { PageSkeleton } from "../components/PageSkeleton";
 import type { Agent, Issue } from "@paperclipai/shared";
 import { PluginSlotOutlet } from "@/plugins/slots";
+import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
+import { friendlyStatus, friendlyStatusColor } from "../lib/friendlyLabels";
 
 const DASHBOARD_ACTIVITY_LIMIT = 10;
 
@@ -34,10 +36,110 @@ function getRecentIssues(issues: Issue[]): Issue[] {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
+function SimplifiedDashboard({
+  issues,
+  projects,
+  selectedCompanyId,
+}: {
+  issues: Issue[] | undefined;
+  projects: Array<{ id: string; name: string; color?: string | null }> | undefined;
+  selectedCompanyId: string | null;
+}) {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { openNewIssue } = useDialogActions();
+
+  const activeProjects = projects?.filter((p) => p.name !== "Onboarding") ?? [];
+  const effectiveProjectId = selectedProjectId ?? activeProjects[0]?.id ?? null;
+
+  const filteredIssues = useMemo(() => {
+    if (!issues || !effectiveProjectId) return [];
+    return issues
+      .filter((i) => i.projectId === effectiveProjectId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [issues, effectiveProjectId]);
+
+  const needsAttention = filteredIssues.filter((i) => i.status === "in_review");
+  const otherIssues = filteredIssues.filter((i) => i.status !== "in_review");
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold text-foreground">My Requests</h1>
+        <button
+          onClick={() => openNewIssue({ projectId: effectiveProjectId })}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-sm"
+        >
+          Request a Change
+        </button>
+      </div>
+
+      {activeProjects.length > 1 && (
+        <div className="flex gap-1 mb-6 border-b border-border">
+          {activeProjects.map((project) => (
+            <button
+              key={project.id}
+              onClick={() => setSelectedProjectId(project.id)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                project.id === effectiveProjectId
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {project.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {needsAttention.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-sm font-medium text-amber-700 mb-3">Needs Your Review</h2>
+          <div className="flex flex-col gap-2">
+            {needsAttention.map((issue) => (
+              <RequestCard key={issue.id} issue={issue} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {otherIssues.map((issue) => (
+          <RequestCard key={issue.id} issue={issue} />
+        ))}
+      </div>
+
+      {filteredIssues.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground">
+          <p className="text-lg">No requests yet</p>
+          <p className="text-sm mt-1">Click &quot;Request a Change&quot; to get started</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RequestCard({ issue }: { issue: Issue }) {
+  return (
+    <Link
+      to={`/issues/${issue.identifier ?? issue.id}`}
+      className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:border-foreground/20 hover:shadow-sm transition-all"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground truncate">{issue.title}</p>
+        <p className="text-xs text-muted-foreground mt-1">{timeAgo(issue.updatedAt)}</p>
+      </div>
+      <span className={`ml-3 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 ${friendlyStatusColor(issue.status)}`}>
+        {friendlyStatus(issue.status)}
+      </span>
+    </Link>
+  );
+}
+
 export function Dashboard() {
   const { selectedCompanyId, companies } = useCompany();
   const { openOnboarding } = useDialogActions();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const isSimplified = useIsSimplifiedView();
   const [animatedActivityIds, setAnimatedActivityIds] = useState<Set<string>>(new Set());
   const seenActivityIdsRef = useRef<Set<string>>(new Set());
   const hydratedActivityRef = useRef(false);
@@ -170,6 +272,16 @@ export function Dashboard() {
     if (!id || !agents) return null;
     return agents.find((a) => a.id === id)?.name ?? null;
   };
+
+  if (isSimplified) {
+    return (
+      <SimplifiedDashboard
+        issues={issues}
+        projects={projects}
+        selectedCompanyId={selectedCompanyId}
+      />
+    );
+  }
 
   if (!selectedCompanyId) {
     if (companies.length === 0) {
