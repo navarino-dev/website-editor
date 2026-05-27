@@ -17,6 +17,7 @@ import { buildCompanyUserInlineOptions, buildMarkdownMentionOptions } from "../l
 import { queryKeys } from "../lib/queryKeys";
 import { orderReusableExecutionWorkspaces } from "../lib/reusable-execution-workspaces";
 import { useProjectOrder } from "../hooks/useProjectOrder";
+import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
 import { getRecentAssigneeIds, sortAgentsByRecency, trackRecentAssignee } from "../lib/recent-assignees";
 import { getRecentProjectIds, trackRecentProject } from "../lib/recent-projects";
 import { buildExecutionPolicy } from "../lib/issue-execution-policy";
@@ -294,6 +295,7 @@ const IssueTitleTextarea = memo(function IssueTitleTextarea({
   descriptionEditorRef,
   assigneeSelectorRef,
   projectSelectorRef,
+  placeholder,
   onChange,
 }: {
   value: string;
@@ -303,6 +305,7 @@ const IssueTitleTextarea = memo(function IssueTitleTextarea({
   descriptionEditorRef: RefObject<MarkdownEditorRef | null>;
   assigneeSelectorRef: RefObject<HTMLButtonElement | null>;
   projectSelectorRef: RefObject<HTMLButtonElement | null>;
+  placeholder?: string;
   onChange: (value: string) => void;
 }) {
   const [draftValue, setDraftValue] = useState(value);
@@ -314,7 +317,7 @@ const IssueTitleTextarea = memo(function IssueTitleTextarea({
   return (
     <textarea
       className="w-full text-lg font-semibold bg-transparent outline-none resize-none overflow-hidden placeholder:text-muted-foreground/50"
-      placeholder="Issue title"
+      placeholder={placeholder ?? "Issue title"}
       rows={1}
       value={draftValue}
       onChange={(e) => {
@@ -359,6 +362,7 @@ const IssueDescriptionEditor = memo(function IssueDescriptionEditor({
   mentions,
   descriptionEditorRef,
   imageUploadHandler,
+  placeholder,
   onChange,
 }: {
   value: string;
@@ -366,6 +370,7 @@ const IssueDescriptionEditor = memo(function IssueDescriptionEditor({
   mentions: MentionOption[];
   descriptionEditorRef: RefObject<MarkdownEditorRef | null>;
   imageUploadHandler: (file: File) => Promise<string>;
+  placeholder?: string;
   onChange: (value: string) => void;
 }) {
   const [draftValue, setDraftValue] = useState(value);
@@ -382,7 +387,7 @@ const IssueDescriptionEditor = memo(function IssueDescriptionEditor({
         setDraftValue(nextValue);
         onChange(nextValue);
       }}
-      placeholder="Add description..."
+      placeholder={placeholder ?? "Add description..."}
       bordered={false}
       mentions={mentions}
       contentClassName={cn("text-sm text-muted-foreground pb-12", expanded ? "min-h-[220px]" : "min-h-[120px]")}
@@ -402,6 +407,7 @@ function issueExecutionWorkspaceModeForExistingWorkspace(mode: string | null | u
 }
 
 export function NewIssueDialog() {
+  const isSimplified = useIsSimplifiedView();
   const { newIssueOpen, newIssueDefaults, closeNewIssue } = useDialog();
   const { companies, selectedCompanyId, selectedCompany } = useCompany();
   const queryClient = useQueryClient();
@@ -1326,6 +1332,7 @@ export function NewIssueDialog() {
               descriptionEditorRef={descriptionEditorRef}
               assigneeSelectorRef={assigneeSelectorRef}
               projectSelectorRef={projectSelectorRef}
+              placeholder={isSimplified ? "What do you need changed?" : "Issue title"}
               onChange={handleTitleChange}
             />
           </div>
@@ -1333,62 +1340,66 @@ export function NewIssueDialog() {
           <div className="px-4 pb-2">
             <div className="overflow-x-auto overscroll-x-contain">
               <div className="inline-flex items-center gap-2 text-sm text-muted-foreground flex-wrap sm:flex-nowrap sm:min-w-max">
-              <span className="w-6 shrink-0 text-center">For</span>
-              <InlineEntitySelector
-                ref={assigneeSelectorRef}
-                value={assigneeValue}
-                options={assigneeOptions}
-                recentOptionIds={recentAssigneeOptionIds}
-                placeholder="Assignee"
-                disablePortal
-                noneLabel="No assignee"
-                searchPlaceholder="Search assignees..."
-                emptyMessage="No assignees found."
-                onChange={(value) => {
-                  const nextAssignee = parseAssigneeValue(value);
-                  if (nextAssignee.assigneeAgentId) {
-                    trackRecentAssignee(nextAssignee.assigneeAgentId);
-                  }
-                  setAssigneeValue(value);
-                  const hasAssignee = Boolean(nextAssignee.assigneeAgentId || nextAssignee.assigneeUserId);
-                  if (hasAssignee && status === "backlog") {
-                    setStatus("todo");
-                  }
-                }}
-                onConfirm={() => {
-                  if (projectId) {
-                    descriptionEditorRef.current?.focus();
-                  } else {
-                    projectSelectorRef.current?.focus();
-                  }
-                }}
-                renderTriggerValue={(option) =>
-                  option ? (
-                    currentAssignee ? (
-                      <>
-                        <AgentIcon icon={currentAssignee.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{option.label}</span>
-                      </>
-                    ) : (
-                      <span className="truncate">{option.label}</span>
-                    )
-                  ) : (
-                    <span className="text-muted-foreground">Assignee</span>
-                  )
-                }
-                renderOption={(option) => {
-                  if (!option.id) return <span className="truncate">{option.label}</span>;
-                  const assignee = parseAssigneeValue(option.id).assigneeAgentId
-                    ? (agents ?? []).find((agent) => agent.id === parseAssigneeValue(option.id).assigneeAgentId)
-                    : null;
-                  return (
-                    <>
-                      {assignee ? <AgentIcon icon={assignee.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : null}
-                      <span className="truncate">{option.label}</span>
-                    </>
-                  );
-                }}
-              />
+              {!isSimplified && (
+                <>
+                  <span className="w-6 shrink-0 text-center">For</span>
+                  <InlineEntitySelector
+                    ref={assigneeSelectorRef}
+                    value={assigneeValue}
+                    options={assigneeOptions}
+                    recentOptionIds={recentAssigneeOptionIds}
+                    placeholder="Assignee"
+                    disablePortal
+                    noneLabel="No assignee"
+                    searchPlaceholder="Search assignees..."
+                    emptyMessage="No assignees found."
+                    onChange={(value) => {
+                      const nextAssignee = parseAssigneeValue(value);
+                      if (nextAssignee.assigneeAgentId) {
+                        trackRecentAssignee(nextAssignee.assigneeAgentId);
+                      }
+                      setAssigneeValue(value);
+                      const hasAssignee = Boolean(nextAssignee.assigneeAgentId || nextAssignee.assigneeUserId);
+                      if (hasAssignee && status === "backlog") {
+                        setStatus("todo");
+                      }
+                    }}
+                    onConfirm={() => {
+                      if (projectId) {
+                        descriptionEditorRef.current?.focus();
+                      } else {
+                        projectSelectorRef.current?.focus();
+                      }
+                    }}
+                    renderTriggerValue={(option) =>
+                      option ? (
+                        currentAssignee ? (
+                          <>
+                            <AgentIcon icon={currentAssignee.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{option.label}</span>
+                          </>
+                        ) : (
+                          <span className="truncate">{option.label}</span>
+                        )
+                      ) : (
+                        <span className="text-muted-foreground">Assignee</span>
+                      )
+                    }
+                    renderOption={(option) => {
+                      if (!option.id) return <span className="truncate">{option.label}</span>;
+                      const assignee = parseAssigneeValue(option.id).assigneeAgentId
+                        ? (agents ?? []).find((agent) => agent.id === parseAssigneeValue(option.id).assigneeAgentId)
+                        : null;
+                      return (
+                        <>
+                          {assignee ? <AgentIcon icon={assignee.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : null}
+                          <span className="truncate">{option.label}</span>
+                        </>
+                      );
+                    }}
+                  />
+                </>
+              )}
               <span>in</span>
               <InlineEntitySelector
                 ref={projectSelectorRef}
@@ -1433,7 +1444,7 @@ export function NewIssueDialog() {
               />
 
               {/* Three-dot menu to add Reviewer / Approver rows */}
-              <Popover open={participantMenuOpen} onOpenChange={setParticipantMenuOpen}>
+              {!isSimplified && <Popover open={participantMenuOpen} onOpenChange={setParticipantMenuOpen}>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
@@ -1473,12 +1484,12 @@ export function NewIssueDialog() {
                     Approver
                   </button>
                 </PopoverContent>
-              </Popover>
+              </Popover>}
               </div>
             </div>
 
             {/* Reviewer row */}
-            {showReviewerRow && (
+            {!isSimplified && showReviewerRow && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                 <span className="w-6 shrink-0 flex items-center justify-center"><Eye className="h-3.5 w-3.5" /></span>
                 <InlineEntitySelector
@@ -1523,7 +1534,7 @@ export function NewIssueDialog() {
             )}
 
             {/* Approver row */}
-            {showApproverRow && (
+            {!isSimplified && showApproverRow && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                 <span className="w-6 shrink-0 flex items-center justify-center"><ShieldCheck className="h-3.5 w-3.5" /></span>
                 <InlineEntitySelector
@@ -1585,7 +1596,7 @@ export function NewIssueDialog() {
             </div>
           ) : null}
 
-          {currentProject && currentProjectSupportsExecutionWorkspace && (
+          {!isSimplified && currentProject && currentProjectSupportsExecutionWorkspace && (
             <div className="px-4 py-3 space-y-2">
             <div className="space-y-1.5">
               <div className="text-xs font-medium">Execution workspace</div>
@@ -1636,7 +1647,7 @@ export function NewIssueDialog() {
             </div>
           )}
 
-          {supportsAssigneeOverrides && (
+          {!isSimplified && supportsAssigneeOverrides && (
             <div className="px-4 pb-2">
             <button
               className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -1759,6 +1770,7 @@ export function NewIssueDialog() {
                 mentions={mentionOptions}
                 descriptionEditorRef={descriptionEditorRef}
                 imageUploadHandler={uploadDescriptionImageHandler}
+                placeholder={isSimplified ? "Describe the change you'd like to see..." : "Add description..."}
                 onChange={handleDescriptionChange}
               />
             </div>
@@ -1838,6 +1850,7 @@ export function NewIssueDialog() {
         {/* Property chips bar */}
         <div className="flex items-center gap-1.5 px-4 py-2 border-t border-border flex-wrap shrink-0">
           {/* Status chip */}
+          {!isSimplified && (
           <Popover open={statusOpen} onOpenChange={setStatusOpen}>
             <PopoverTrigger asChild>
               <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
@@ -1866,8 +1879,10 @@ export function NewIssueDialog() {
               ))}
             </PopoverContent>
           </Popover>
+          )}
 
           {/* Priority chip */}
+          {!isSimplified && (
           <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
             <PopoverTrigger asChild>
               <button
@@ -1904,6 +1919,7 @@ export function NewIssueDialog() {
               ))}
             </PopoverContent>
           </Popover>
+          )}
 
           {/* Labels chip — disabled, not wired up yet */}
           {/* <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground">
@@ -1929,6 +1945,7 @@ export function NewIssueDialog() {
           </button>
 
           {/* Work mode chip */}
+          {!isSimplified && (
           <Popover open={workModeOpen} onOpenChange={setWorkModeOpen}>
             <PopoverTrigger asChild>
               <button
@@ -1969,8 +1986,10 @@ export function NewIssueDialog() {
               })}
             </PopoverContent>
           </Popover>
+          )}
 
           {/* More */}
+          {!isSimplified && (
           <Popover open={moreOpen} onOpenChange={setMoreOpen}>
             <PopoverTrigger asChild>
               <button
@@ -2016,6 +2035,7 @@ export function NewIssueDialog() {
               </button>
             </PopoverContent>
           </Popover>
+          )}
         </div>
 
         {assigneeValue && status === "backlog" ? (
@@ -2061,7 +2081,7 @@ export function NewIssueDialog() {
             >
               <span className="inline-flex items-center justify-center gap-1.5">
                 {createIssue.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                <span>{createIssue.isPending ? "Creating..." : isSubIssueMode ? "Create Sub-Issue" : "Create Issue"}</span>
+                <span>{createIssue.isPending ? "Creating..." : isSubIssueMode ? "Create Sub-Issue" : isSimplified ? "Submit Request" : "Create Issue"}</span>
               </span>
             </Button>
           </div>
