@@ -59,6 +59,8 @@ import {
   type OptimisticIssueComment,
 } from "../lib/optimistic-issue-comments";
 import { clearIssueExecutionRun, removeLiveRunById, upsertInterruptedRun } from "../lib/optimistic-issue-runs";
+import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
+import { friendlyStatus, friendlyStatusColor } from "../lib/friendlyLabels";
 import { useProjectOrder } from "../hooks/useProjectOrder";
 import { relativeTime, cn, formatDurationMs, formatTokens, visibleRunCostUsd } from "../lib/utils";
 import { ApprovalCard } from "../components/ApprovalCard";
@@ -120,6 +122,7 @@ import {
   Check,
   ChevronRight,
   Copy,
+  ExternalLink,
   Eye,
   EyeOff,
   Flag,
@@ -1235,6 +1238,7 @@ export function IssueDetail() {
   const location = useLocation();
   const { pushToast } = useToastActions();
   const { isMobile } = useSidebar();
+  const isSimplified = useIsSimplifiedView();
   const [moreOpen, setMoreOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [mobilePropsOpen, setMobilePropsOpen] = useState(false);
@@ -2652,6 +2656,10 @@ export function IssueDetail() {
   }, [issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (isSimplified) {
+      closePanel();
+      return;
+    }
     if (!panelIssue) {
       closePanel();
       return;
@@ -2668,6 +2676,7 @@ export function IssueDetail() {
   }, [
     closePanel,
     handleIssuePropertiesUpdate,
+    isSimplified,
     issuePanelKey,
     openNewSubIssue,
     openPanel,
@@ -2998,6 +3007,15 @@ export function IssueDetail() {
   const handleResumeFromBacklog = useCallback(async () => {
     await updateIssue.mutateAsync({ status: "todo" });
   }, [updateIssue.mutateAsync]);
+  const handleApproveAndGoLive = useCallback(async () => {
+    if (!issue) return;
+    const reviewerAgent = agents?.find((a: any) => a.role === "qa");
+    if (reviewerAgent) {
+      await issuesApi.update(issue.id, { assigneeAgentId: reviewerAgent.id });
+    }
+    await issuesApi.addComment(issue.id, "Approved — go live.");
+    queryClient.invalidateQueries({ queryKey: queryKeys.issues.detail(issue.id) });
+  }, [issue, agents, queryClient]);
   const activeRecoveryActionId = issue?.activeRecoveryAction?.id;
   const handleResolveRecoveryAction = useCallback(
     (outcome: import("../components/IssueRecoveryActionCard").RecoveryResolveOutcome) => {
@@ -3331,18 +3349,28 @@ export function IssueDetail() {
 
       <div className="space-y-3">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <StatusIcon
-            status={issue.status}
-            blockerAttention={issue.blockerAttention}
-            onChange={(status) => updateIssue.mutate({ status })}
-          />
-          <PriorityIcon
-            priority={issue.priority}
-            onChange={(priority) => updateIssue.mutate({ priority })}
-          />
-          <span className="text-sm font-mono text-muted-foreground shrink-0">{issue.identifier ?? issue.id.slice(0, 8)}</span>
+          {isSimplified ? (
+            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${friendlyStatusColor(issue.status)}`}>
+              {friendlyStatus(issue.status)}
+            </span>
+          ) : (
+            <>
+              <StatusIcon
+                status={issue.status}
+                blockerAttention={issue.blockerAttention}
+                onChange={(status) => updateIssue.mutate({ status })}
+              />
+              <PriorityIcon
+                priority={issue.priority}
+                onChange={(priority) => updateIssue.mutate({ priority })}
+              />
+            </>
+          )}
+          {!isSimplified && (
+            <span className="text-sm font-mono text-muted-foreground shrink-0">{issue.identifier ?? issue.id.slice(0, 8)}</span>
+          )}
 
-          {hasLiveRuns && (
+          {!isSimplified && hasLiveRuns && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-medium text-cyan-600 dark:text-cyan-400 shrink-0">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
@@ -3352,7 +3380,7 @@ export function IssueDetail() {
             </span>
           )}
 
-          {issue.originKind === "routine_execution" && issue.originId && (
+          {!isSimplified && issue.originKind === "routine_execution" && issue.originId && (
             <Link
               to={`/routines/${issue.originId}`}
               className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 border border-violet-500/30 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 shrink-0 hover:bg-violet-500/20 transition-colors"
@@ -3362,7 +3390,7 @@ export function IssueDetail() {
             </Link>
           )}
 
-          {issue.productivityReview ? (
+          {!isSimplified && issue.productivityReview ? (
             <ProductivityReviewBadge review={issue.productivityReview} />
           ) : null}
 
@@ -3879,34 +3907,40 @@ export function IssueDetail() {
         onOpenChange={setGalleryOpen}
       />
 
-      <IssueWorkspaceCard
-        issue={issue}
-        project={resolvedProject}
-        onUpdate={(data) => updateIssue.mutate(data)}
-      />
+      {!isSimplified && (
+        <>
+          <IssueWorkspaceCard
+            issue={issue}
+            project={resolvedProject}
+            onUpdate={(data) => updateIssue.mutate(data)}
+          />
 
-      <Separator />
+          <Separator />
+        </>
+      )}
 
       <Tabs value={detailTab} onValueChange={setDetailTab} className="space-y-3">
-        <TabsList variant="line" className="w-full justify-start gap-1">
-          <TabsTrigger value="chat" className="gap-1.5">
-            <MessageSquare className="h-3.5 w-3.5" />
-            Chat
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="gap-1.5">
-            <ActivityIcon className="h-3.5 w-3.5" />
-            Activity
-          </TabsTrigger>
-          <TabsTrigger value="related-work" className="gap-1.5">
-            <ListTree className="h-3.5 w-3.5" />
-            Related work
-          </TabsTrigger>
-          {issuePluginTabItems.map((item) => (
-            <TabsTrigger key={item.value} value={item.value}>
-              {item.label}
+        {!isSimplified && (
+          <TabsList variant="line" className="w-full justify-start gap-1">
+            <TabsTrigger value="chat" className="gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5" />
+              Chat
             </TabsTrigger>
-          ))}
-        </TabsList>
+            <TabsTrigger value="activity" className="gap-1.5">
+              <ActivityIcon className="h-3.5 w-3.5" />
+              Activity
+            </TabsTrigger>
+            <TabsTrigger value="related-work" className="gap-1.5">
+              <ListTree className="h-3.5 w-3.5" />
+              Related work
+            </TabsTrigger>
+            {issuePluginTabItems.map((item) => (
+              <TabsTrigger key={item.value} value={item.value}>
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        )}
 
         <TabsContent value="chat">
           {detailTab === "chat" ? (
@@ -3984,6 +4018,22 @@ export function IssueDetail() {
               }
             />
           ) : null}
+          {isSimplified && issue?.status === "in_review" && (
+            <div className="flex gap-3 p-4 border-t border-border bg-background sticky bottom-0">
+              <button
+                onClick={handleApproveAndGoLive}
+                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors text-sm"
+              >
+                Approve &amp; Go Live
+              </button>
+              <button
+                onClick={() => commentComposerRef.current?.focus()}
+                className="flex-1 px-4 py-3 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-lg border border-gray-300 transition-colors text-sm"
+              >
+                Request Changes
+              </button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="activity">
@@ -4181,6 +4231,7 @@ export function IssueDetail() {
       </Dialog>
 
       {/* Mobile properties drawer */}
+      {!isSimplified && (
       <Sheet open={mobilePropsOpen} onOpenChange={setMobilePropsOpen}>
         <SheetContent side="bottom" className="max-h-[85dvh] pb-[env(safe-area-inset-bottom)]">
           <SheetHeader>
@@ -4199,6 +4250,7 @@ export function IssueDetail() {
           </ScrollArea>
         </SheetContent>
       </Sheet>
+      )}
       <ScrollToBottom />
     </div>
   );

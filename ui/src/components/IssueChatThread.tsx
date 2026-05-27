@@ -133,10 +133,11 @@ import { cn, formatDateTime, formatShortDate } from "../lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, ArrowRight, Brain, Check, ChevronDown, ClipboardList, Copy, Hammer, Loader2, MoreHorizontal, Paperclip, PauseCircle, Search, Square, ThumbsDown, ThumbsUp } from "lucide-react";
+import { AlertTriangle, ArrowRight, Brain, Check, ChevronDown, ClipboardList, Copy, ExternalLink, Hammer, Loader2, MoreHorizontal, Paperclip, PauseCircle, Search, Square, ThumbsDown, ThumbsUp } from "lucide-react";
 import { IssueBlockedNotice } from "./IssueBlockedNotice";
 import { IssueAssignedBacklogNotice } from "./IssueAssignedBacklogNotice";
 import { IssueRecoveryActionCard, type RecoveryResolveOutcome } from "./IssueRecoveryActionCard";
+import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
 
 interface IssueChatMessageContext {
   feedbackDataSharingPreference: FeedbackDataSharingPreference;
@@ -633,20 +634,40 @@ function commentDateLabel(date: Date | string | undefined): string {
   return formatShortDate(date);
 }
 
+function extractPreviewUrl(body: string): string | null {
+  const match = body.match(/https:\/\/[^\s)]+\.vercel\.app[^\s)]*/);
+  return match ? match[0] : null;
+}
+
 const IssueChatTextPart = memo(function IssueChatTextPart({ text, recessed }: { text: string; recessed?: boolean }) {
   const { onImageClick } = useContext(IssueChatCtx);
+  const isSimplified = useIsSimplifiedView();
   if (isSuccessfulRunHandoffComment(text)) {
     return <SuccessfulRunHandoffCommentCallout text={text} recessed={recessed} onImageClick={onImageClick} />;
   }
+  const previewUrl = isSimplified ? extractPreviewUrl(text) : null;
   return (
-    <MarkdownBody
-      className="text-sm leading-6"
-      style={recessed ? { opacity: 0.55 } : undefined}
-      softBreaks
-      onImageClick={onImageClick}
-    >
-      {text}
-    </MarkdownBody>
+    <>
+      <MarkdownBody
+        className="text-sm leading-6"
+        style={recessed ? { opacity: 0.55 } : undefined}
+        softBreaks
+        onImageClick={onImageClick}
+      >
+        {text}
+      </MarkdownBody>
+      {previewUrl && (
+        <a
+          href={previewUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-sm mt-2"
+        >
+          <ExternalLink className="h-4 w-4" />
+          View Preview
+        </a>
+      )}
+    </>
   );
 });
 
