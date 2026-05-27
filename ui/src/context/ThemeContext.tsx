@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
 
 type Theme = "light" | "dark";
 
@@ -41,13 +40,6 @@ function applyTheme(theme: Theme) {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => resolveThemeFromDocument());
-  const isSimplified = useIsSimplifiedView();
-
-  useEffect(() => {
-    if (isSimplified) {
-      applyTheme("light");
-    }
-  }, [isSimplified]);
 
   const setTheme = useCallback((nextTheme: Theme) => {
     setThemeState(nextTheme);
@@ -58,14 +50,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (isSimplified) return;
     applyTheme(theme);
     try {
       localStorage.setItem(THEME_STORAGE_KEY, theme);
     } catch {
       // Ignore local storage write failures in restricted environments.
     }
-  }, [theme, isSimplified]);
+  }, [theme]);
 
   const value = useMemo(
     () => ({
@@ -89,4 +80,13 @@ export function useTheme() {
     throw new Error("useTheme must be used within ThemeProvider");
   }
   return context;
+}
+
+export function useSimplifiedThemeEnforcer(isSimplified: boolean) {
+  const { setTheme } = useTheme();
+  useEffect(() => {
+    if (isSimplified) {
+      applyTheme("light");
+    }
+  }, [isSimplified, setTheme]);
 }

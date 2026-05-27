@@ -26,6 +26,7 @@ import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { useInboxBadge } from "../hooks/useInboxBadge";
 import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
+import { useSimplifiedThemeEnforcer } from "../context/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { PluginSlotOutlet } from "@/plugins/slots";
 import { PluginLauncherOutlet } from "@/plugins/launchers";
@@ -48,6 +49,7 @@ export function Sidebar() {
   const liveRunCount = liveRuns?.length ?? 0;
   const showWorkspacesLink = experimentalSettings?.enableIsolatedWorkspaces === true;
   const isSimplified = useIsSimplifiedView();
+  useSimplifiedThemeEnforcer(isSimplified);
 
   const pluginContext = {
     companyId: selectedCompanyId,
