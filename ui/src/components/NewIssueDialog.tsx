@@ -1160,7 +1160,18 @@ export function NewIssueDialog() {
     setProjectWorkspaceId(defaultProjectWorkspaceIdForProject(nextProject));
     setExecutionWorkspaceMode(defaultExecutionWorkspaceModeForProject(nextProject));
     setSelectedExecutionWorkspaceId("");
-  }, [orderedProjects]);
+    if (isSimplified && nextProject?.leadAgentId) {
+      setAssigneeValue(`agent:${nextProject.leadAgentId}`);
+    }
+  }, [orderedProjects, isSimplified]);
+
+  useEffect(() => {
+    if (!isSimplified || !newIssueOpen || assigneeValue) return;
+    const project = orderedProjects.find((p) => p.id === projectId);
+    if (project?.leadAgentId) {
+      setAssigneeValue(`agent:${project.leadAgentId}`);
+    }
+  }, [isSimplified, newIssueOpen, projectId, assigneeValue, orderedProjects]);
 
   useEffect(() => {
     if (
