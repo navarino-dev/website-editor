@@ -162,7 +162,7 @@ function ColorPicker({
 
 /* ── List (issues) tab content ── */
 
-function ProjectIssuesList({ projectId, companyId }: { projectId: string; companyId: string }) {
+function ProjectIssuesList({ projectId, companyId, leadAgentId }: { projectId: string; companyId: string; leadAgentId?: string }) {
   const queryClient = useQueryClient();
 
   const { data: agents } = useQuery({
@@ -211,6 +211,7 @@ function ProjectIssuesList({ projectId, companyId }: { projectId: string; compan
       projectId={projectId}
       viewStateKey="paperclip:project-issues-view"
       onUpdateIssue={(id, data) => updateIssue.mutate({ id, data })}
+      baseCreateIssueDefaults={leadAgentId ? { assigneeAgentId: leadAgentId } : undefined}
     />
   );
 }
@@ -788,7 +789,7 @@ export function ProjectDetail() {
       )}
 
       {activeTab === "list" && project?.id && resolvedCompanyId && (
-        <ProjectIssuesList projectId={project.id} companyId={resolvedCompanyId} />
+        <ProjectIssuesList projectId={project.id} companyId={resolvedCompanyId} leadAgentId={project.leadAgentId ?? undefined} />
       )}
 
       {activeTab === "plugin-operations" && project?.id && resolvedCompanyId && project.managedByPlugin && (
