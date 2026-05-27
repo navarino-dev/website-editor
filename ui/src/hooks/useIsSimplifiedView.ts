@@ -3,7 +3,7 @@ import { accessApi } from "../api/access";
 import { queryKeys } from "../lib/queryKeys";
 import { useCompany } from "../context/CompanyContext";
 
-const ADMIN_ROLES = new Set(["owner", "admin", "operator", "manager"]);
+const ADMIN_ROLES = new Set(["owner", "admin", "manager"]);
 
 export function useIsSimplifiedView(): boolean {
   const { selectedCompanyId } = useCompany();
