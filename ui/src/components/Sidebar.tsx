@@ -25,6 +25,7 @@ import { heartbeatsApi } from "../api/heartbeats";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { useInboxBadge } from "../hooks/useInboxBadge";
+import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
 import { Button } from "@/components/ui/button";
 import { PluginSlotOutlet } from "@/plugins/slots";
 import { PluginLauncherOutlet } from "@/plugins/launchers";
@@ -46,6 +47,7 @@ export function Sidebar() {
   });
   const liveRunCount = liveRuns?.length ?? 0;
   const showWorkspacesLink = experimentalSettings?.enableIsolatedWorkspaces === true;
+  const isSimplified = useIsSimplifiedView();
 
   const pluginContext = {
     companyId: selectedCompanyId,
@@ -57,18 +59,20 @@ export function Sidebar() {
       {/* Top bar: Company name (bold) + Search — aligned with top sections (no visible border) */}
       <div className="flex items-center gap-1 px-3 h-12 shrink-0">
         <SidebarCompanyMenu />
-        <Button
-          asChild
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground shrink-0"
-          aria-label="Open search"
-          title="Open search"
-        >
-          <NavLink to="/search">
-            <Search className="h-4 w-4" />
-          </NavLink>
-        </Button>
+        {!isSimplified && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground shrink-0"
+            aria-label="Open search"
+            title="Open search"
+          >
+            <NavLink to="/search">
+              <Search className="h-4 w-4" />
+            </NavLink>
+          </Button>
+        )}
       </div>
 
       <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-auto-hide flex flex-col gap-4 pointer-coarse:gap-3 px-3 py-2">
@@ -80,9 +84,9 @@ export function Sidebar() {
             className="flex items-center gap-2.5 px-3 py-2 pointer-coarse:py-1.5 text-[13px] font-medium text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
           >
             <SquarePen className="h-4 w-4 shrink-0" />
-            <span className="truncate">New Issue</span>
+            <span className="truncate">{isSimplified ? "Request a Change" : "New Issue"}</span>
           </button>
-          <SidebarNavItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} liveCount={liveRunCount} />
+          <SidebarNavItem to="/dashboard" label={isSimplified ? "My Requests" : "Dashboard"} icon={LayoutDashboard} liveCount={isSimplified ? undefined : liveRunCount} />
           <SidebarNavItem
             to="/inbox"
             label="Inbox"
@@ -93,47 +97,53 @@ export function Sidebar() {
           />
         </div>
 
-        <SidebarSection label="Work">
-          <SidebarNavItem to="/issues" label="Issues" icon={CircleDot} />
-          <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
-          <SidebarNavItem to="/goals" label="Goals" icon={Target} />
-          {showWorkspacesLink ? (
-            <SidebarNavItem to="/workspaces" label="Workspaces" icon={GitBranch} />
-          ) : null}
-          <PluginSlotOutlet
-            slotTypes={["sidebar"]}
-            context={pluginContext}
-            className="flex flex-col gap-0.5"
-            itemClassName="text-[13px] font-medium"
-            missingBehavior="placeholder"
-          />
-          <PluginLauncherOutlet
-            placementZones={["sidebar"]}
-            context={pluginContext}
-            className="flex flex-col gap-0.5"
-            itemClassName="text-[13px] font-medium"
-          />
-        </SidebarSection>
+        {!isSimplified && (
+          <SidebarSection label="Work">
+            <SidebarNavItem to="/issues" label="Issues" icon={CircleDot} />
+            <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
+            <SidebarNavItem to="/goals" label="Goals" icon={Target} />
+            {showWorkspacesLink ? (
+              <SidebarNavItem to="/workspaces" label="Workspaces" icon={GitBranch} />
+            ) : null}
+            <PluginSlotOutlet
+              slotTypes={["sidebar"]}
+              context={pluginContext}
+              className="flex flex-col gap-0.5"
+              itemClassName="text-[13px] font-medium"
+              missingBehavior="placeholder"
+            />
+            <PluginLauncherOutlet
+              placementZones={["sidebar"]}
+              context={pluginContext}
+              className="flex flex-col gap-0.5"
+              itemClassName="text-[13px] font-medium"
+            />
+          </SidebarSection>
+        )}
 
         <SidebarProjects />
 
-        <SidebarAgents />
+        {!isSimplified && <SidebarAgents />}
 
-        <SidebarSection label="Company">
-          <SidebarNavItem to="/org" label="Org" icon={Network} />
-          <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
-          <SidebarNavItem to="/costs" label="Costs" icon={DollarSign} />
-          <SidebarNavItem to="/activity" label="Activity" icon={History} />
-          <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
-        </SidebarSection>
+        {!isSimplified && (
+          <SidebarSection label="Company">
+            <SidebarNavItem to="/org" label="Org" icon={Network} />
+            <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
+            <SidebarNavItem to="/costs" label="Costs" icon={DollarSign} />
+            <SidebarNavItem to="/activity" label="Activity" icon={History} />
+            <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
+          </SidebarSection>
+        )}
 
-        <PluginSlotOutlet
-          slotTypes={["sidebarPanel"]}
-          context={pluginContext}
-          className="flex flex-col gap-3"
-          itemClassName="rounded-lg border border-border p-3"
-          missingBehavior="placeholder"
-        />
+        {!isSimplified && (
+          <PluginSlotOutlet
+            slotTypes={["sidebarPanel"]}
+            context={pluginContext}
+            className="flex flex-col gap-3"
+            itemClassName="rounded-lg border border-border p-3"
+            missingBehavior="placeholder"
+          />
+        )}
       </nav>
     </aside>
   );
