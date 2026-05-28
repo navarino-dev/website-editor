@@ -20,14 +20,14 @@ import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
 import { cn, formatCents } from "../lib/utils";
-import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle } from "lucide-react";
+import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, Plus, ChevronRight, Sparkles } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
 import type { Agent, Issue } from "@paperclipai/shared";
 import { PluginSlotOutlet } from "@/plugins/slots";
 import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
-import { friendlyStatus, friendlyStatusColor } from "../lib/friendlyLabels";
+import { friendlyStatusMeta } from "../lib/friendlyLabels";
 
 const DASHBOARD_ACTIVITY_LIMIT = 10;
 
@@ -36,20 +36,50 @@ function getRecentIssues(issues: Issue[]): Issue[] {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
+function StatusPill({ status }: { status: string }) {
+  const meta = friendlyStatusMeta(status);
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${meta.pill}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+      {meta.label}
+    </span>
+  );
+}
+
+function RequestCard({ issue, index = 0 }: { issue: Issue; index?: number }) {
+  return (
+    <Link
+      to={`/issues/${issue.identifier ?? issue.id}`}
+      className="pm-rise group flex items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_10px_30px_-14px_rgba(40,55,45,0.25)]"
+      style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-medium leading-snug text-foreground">
+          {issue.title}
+        </p>
+        <p className="mt-1 text-[13px] text-muted-foreground">{timeAgo(issue.updatedAt)}</p>
+      </div>
+      <StatusPill status={issue.status} />
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
+    </Link>
+  );
+}
+
 function SimplifiedDashboard({
   issues,
   projects,
-  selectedCompanyId,
 }: {
   issues: Issue[] | undefined;
   projects: Array<{ id: string; name: string; color?: string | null }> | undefined;
-  selectedCompanyId: string | null;
 }) {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const { openNewIssue } = useDialogActions();
 
   const activeProjects = projects?.filter((p) => p.name !== "Onboarding") ?? [];
   const effectiveProjectId = selectedProjectId ?? activeProjects[0]?.id ?? null;
+  const currentProject = activeProjects.find((p) => p.id === effectiveProjectId);
 
   const filteredIssues = useMemo(() => {
     if (!issues || !effectiveProjectId) return [];
@@ -62,28 +92,35 @@ function SimplifiedDashboard({
   const otherIssues = filteredIssues.filter((i) => i.status !== "in_review");
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-foreground">My Requests</h1>
-        <button
-          onClick={() => openNewIssue({ projectId: effectiveProjectId })}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-sm"
-        >
-          Request a Change
-        </button>
-      </div>
+    <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-14">
+      <header className="mb-8">
+        <p className="mb-1.5 text-[13px] font-medium uppercase tracking-[0.14em] text-primary/70">
+          {currentProject?.name ?? "Your properties"}
+        </p>
+        <div className="flex items-end justify-between gap-4">
+          <h1 className="pm-display text-[2.1rem] leading-[1.1] text-foreground">My Requests</h1>
+          <button
+            onClick={() => openNewIssue({ projectId: effectiveProjectId })}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-md hover:brightness-[1.06] active:scale-[0.98]"
+          >
+            <Plus className="h-4 w-4" />
+            Request a Change
+          </button>
+        </div>
+      </header>
 
       {activeProjects.length > 1 && (
-        <div className="flex gap-1 mb-6 border-b border-border">
+        <div className="mb-7 inline-flex max-w-full gap-1 overflow-x-auto rounded-full bg-secondary p-1 scrollbar-auto-hide">
           {activeProjects.map((project) => (
             <button
               key={project.id}
               onClick={() => setSelectedProjectId(project.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={cn(
+                "shrink-0 rounded-full px-4 py-1.5 text-[13px] font-medium transition-all duration-200",
                 project.id === effectiveProjectId
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
             >
               {project.name}
             </button>
@@ -92,46 +129,55 @@ function SimplifiedDashboard({
       )}
 
       {needsAttention.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-sm font-medium text-amber-700 mb-3">Needs Your Review</h2>
-          <div className="flex flex-col gap-2">
-            {needsAttention.map((issue) => (
-              <RequestCard key={issue.id} issue={issue} />
+        <section className="mb-7">
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+            <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-600">
+              Needs your review
+            </h2>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {needsAttention.map((issue, i) => (
+              <RequestCard key={issue.id} issue={issue} index={i} />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      <div className="flex flex-col gap-2">
-        {otherIssues.map((issue) => (
-          <RequestCard key={issue.id} issue={issue} />
-        ))}
-      </div>
+      {otherIssues.length > 0 && (
+        <section>
+          {needsAttention.length > 0 && (
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+              All requests
+            </h2>
+          )}
+          <div className="flex flex-col gap-2.5">
+            {otherIssues.map((issue, i) => (
+              <RequestCard key={issue.id} issue={issue} index={needsAttention.length + i} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {filteredIssues.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground">
-          <p className="text-lg">No requests yet</p>
-          <p className="text-sm mt-1">Click &quot;Request a Change&quot; to get started</p>
+        <div className="pm-rise flex flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-card/50 px-6 py-20 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-primary">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <p className="pm-display text-xl text-foreground">No requests yet</p>
+          <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
+            Tell us what you&apos;d like changed on your website and we&apos;ll take care of the rest.
+          </p>
+          <button
+            onClick={() => openNewIssue({ projectId: effectiveProjectId })}
+            className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-md hover:brightness-[1.06] active:scale-[0.98]"
+          >
+            <Plus className="h-4 w-4" />
+            Request a Change
+          </button>
         </div>
       )}
     </div>
-  );
-}
-
-function RequestCard({ issue }: { issue: Issue }) {
-  return (
-    <Link
-      to={`/issues/${issue.identifier ?? issue.id}`}
-      className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:border-foreground/20 hover:shadow-sm transition-all"
-    >
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{issue.title}</p>
-        <p className="text-xs text-muted-foreground mt-1">{timeAgo(issue.updatedAt)}</p>
-      </div>
-      <span className={`ml-3 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 ${friendlyStatusColor(issue.status)}`}>
-        {friendlyStatus(issue.status)}
-      </span>
-    </Link>
   );
 }
 
@@ -278,7 +324,6 @@ export function Dashboard() {
       <SimplifiedDashboard
         issues={issues}
         projects={projects}
-        selectedCompanyId={selectedCompanyId}
       />
     );
   }

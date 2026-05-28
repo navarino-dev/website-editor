@@ -146,6 +146,69 @@
   --paperclip-doc-annotation-highlight-resolved: #713f12;
 }
 
+/* ── Simplified Property Manager view: "Calm Concierge" theme ──
+   Warm editorial minimalism. Scoped to .pm-view so the admin board UI
+   is untouched. Overrides palette tokens + introduces serif/sans pairing. */
+.pm-view {
+  color-scheme: light;
+  --font-pm-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-pm-sans: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --background: oklch(0.985 0.004 95);
+  --foreground: oklch(0.255 0.012 70);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.255 0.012 70);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.255 0.012 70);
+  --primary: oklch(0.50 0.066 156);
+  --primary-foreground: oklch(0.99 0.006 95);
+  --secondary: oklch(0.965 0.006 95);
+  --secondary-foreground: oklch(0.30 0.012 70);
+  --muted: oklch(0.965 0.006 95);
+  --muted-foreground: oklch(0.555 0.012 75);
+  --accent: oklch(0.955 0.012 156);
+  --accent-foreground: oklch(0.34 0.04 156);
+  --destructive: oklch(0.58 0.18 25);
+  --destructive-foreground: oklch(0.99 0.006 95);
+  --border: oklch(0.918 0.005 90);
+  --input: oklch(0.918 0.005 90);
+  --ring: oklch(0.50 0.066 156);
+  --sidebar: oklch(0.978 0.005 95);
+  --sidebar-foreground: oklch(0.30 0.012 70);
+  --sidebar-primary: oklch(0.50 0.066 156);
+  --sidebar-primary-foreground: oklch(0.99 0.006 95);
+  --sidebar-accent: oklch(0.95 0.014 156);
+  --sidebar-accent-foreground: oklch(0.34 0.04 156);
+  --sidebar-border: oklch(0.925 0.005 90);
+  --sidebar-ring: oklch(0.50 0.066 156);
+
+  font-family: var(--font-pm-sans);
+  letter-spacing: -0.011em;
+  background-color: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+.pm-view .pm-display {
+  font-family: var(--font-pm-display);
+  letter-spacing: -0.02em;
+  font-optical-sizing: auto;
+  font-weight: 470;
+}
+
+.pm-view ::selection {
+  background-color: color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+@keyframes pm-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pm-rise {
+  animation: pm-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 ::highlight(paperclip-doc-annotation-open) {
   background-color: var(--paperclip-doc-annotation-highlight-open);
   color: inherit;

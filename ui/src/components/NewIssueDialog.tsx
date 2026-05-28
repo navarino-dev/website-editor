@@ -1225,7 +1225,8 @@ export function NewIssueDialog() {
           "flex h-[var(--new-issue-dialog-height)] max-h-[var(--new-issue-dialog-height)] flex-col gap-0 overflow-hidden p-0 sm:h-auto",
           expanded
             ? "sm:max-w-2xl sm:h-[var(--new-issue-dialog-height)]"
-            : "sm:max-w-lg"
+            : "sm:max-w-lg",
+          isSimplified && "pm-view rounded-2xl",
         )}
         onKeyDown={handleKeyDown}
         onEscapeKeyDown={(event) => {
@@ -1251,7 +1252,13 @@ export function NewIssueDialog() {
         }}
       >
         {/* Header bar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
+        <div className={cn(
+          "flex items-center justify-between border-b border-border shrink-0",
+          isSimplified ? "px-5 py-3.5" : "px-4 py-2.5",
+        )}>
+          {isSimplified ? (
+            <h2 className="pm-display text-lg text-foreground">Request a Change</h2>
+          ) : (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Popover open={companyOpen} onOpenChange={setCompanyOpen}>
               <PopoverTrigger asChild>
@@ -1310,7 +1317,9 @@ export function NewIssueDialog() {
             <span className="text-muted-foreground/60">&rsaquo;</span>
             <span>{isSubIssueMode ? "New sub-issue" : "New issue"}</span>
           </div>
+          )}
           <div className="flex items-center gap-1">
+            {!isSimplified && (
             <Button
               variant="ghost"
               size="icon-xs"
@@ -1320,6 +1329,7 @@ export function NewIssueDialog() {
             >
               {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-xs"
@@ -2062,7 +2072,20 @@ export function NewIssueDialog() {
         ) : null}
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border shrink-0">
+        <div className={cn(
+          "flex items-center justify-between border-t border-border shrink-0",
+          isSimplified ? "px-5 py-4" : "px-4 py-2.5",
+        )}>
+          {isSimplified ? (
+            <button
+              type="button"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+              onClick={() => closeNewIssue()}
+              disabled={createIssue.isPending}
+            >
+              Cancel
+            </button>
+          ) : (
           <Button
             variant="ghost"
             size="sm"
@@ -2072,17 +2095,30 @@ export function NewIssueDialog() {
           >
             Discard Draft
           </Button>
+          )}
           <div className="flex items-center gap-3">
             <div className="min-h-5 text-right">
               {createIssue.isPending ? (
                 <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  Creating issue...
+                  {isSimplified ? "Submitting..." : "Creating issue..."}
                 </span>
               ) : createIssue.isError ? (
                 <span className="text-xs text-destructive">{createIssueErrorMessage}</span>
               ) : null}
             </div>
+            {isSimplified ? (
+              <button
+                type="button"
+                className="inline-flex min-w-[9rem] items-center justify-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-md hover:brightness-[1.06] active:scale-[0.98] disabled:opacity-50"
+                disabled={!titleHasText || createIssue.isPending}
+                onClick={handleSubmit}
+                aria-busy={createIssue.isPending}
+              >
+                {createIssue.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                <span>{createIssue.isPending ? "Submitting..." : "Submit Request"}</span>
+              </button>
+            ) : (
             <Button
               size="sm"
               className="min-w-[8.5rem] disabled:opacity-100"
@@ -2092,9 +2128,10 @@ export function NewIssueDialog() {
             >
               <span className="inline-flex items-center justify-center gap-1.5">
                 {createIssue.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                <span>{createIssue.isPending ? "Creating..." : isSubIssueMode ? "Create Sub-Issue" : isSimplified ? "Submit Request" : "Create Issue"}</span>
+                <span>{createIssue.isPending ? "Creating..." : isSubIssueMode ? "Create Sub-Issue" : "Create Issue"}</span>
               </span>
             </Button>
+            )}
           </div>
         </div>
       </DialogContent>

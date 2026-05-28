@@ -60,7 +60,7 @@ import {
 } from "../lib/optimistic-issue-comments";
 import { clearIssueExecutionRun, removeLiveRunById, upsertInterruptedRun } from "../lib/optimistic-issue-runs";
 import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
-import { friendlyStatus, friendlyStatusColor } from "../lib/friendlyLabels";
+import { friendlyStatusMeta } from "../lib/friendlyLabels";
 import { useProjectOrder } from "../hooks/useProjectOrder";
 import { relativeTime, cn, formatDurationMs, formatTokens, visibleRunCostUsd } from "../lib/utils";
 import { ApprovalCard } from "../components/ApprovalCard";
@@ -3350,8 +3350,9 @@ export function IssueDetail() {
       <div className="space-y-3">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           {isSimplified ? (
-            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${friendlyStatusColor(issue.status)}`}>
-              {friendlyStatus(issue.status)}
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${friendlyStatusMeta(issue.status).pill}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${friendlyStatusMeta(issue.status).dot}`} />
+              {friendlyStatusMeta(issue.status).label}
             </span>
           ) : (
             <>
@@ -3643,7 +3644,7 @@ export function IssueDetail() {
           value={issue.title}
           onSave={(title) => updateIssue.mutateAsync({ title })}
           as="h2"
-          className="text-xl font-bold"
+          className={isSimplified ? "pm-display text-[1.7rem] leading-tight text-foreground" : "text-xl font-bold"}
         />
 
         <InlineEditor
@@ -3665,6 +3666,7 @@ export function IssueDetail() {
         />
       </div>
 
+      {!isSimplified && (<>
       <PluginSlotOutlet
         slotTypes={["toolbarButton", "contextMenuItem"]}
         entityType="issue"
@@ -3906,6 +3908,7 @@ export function IssueDetail() {
         open={galleryOpen}
         onOpenChange={setGalleryOpen}
       />
+      </>)}
 
       {!isSimplified && (
         <>
@@ -4019,17 +4022,19 @@ export function IssueDetail() {
             />
           ) : null}
           {isSimplified && issue?.status === "in_review" && (
-            <div className="flex gap-3 p-4 border-t border-border bg-background sticky bottom-0">
+            <div className="pm-rise sticky bottom-0 mt-2 flex flex-col gap-3 rounded-2xl border border-border bg-card/95 p-4 shadow-[0_-8px_24px_-16px_rgba(40,55,45,0.25)] backdrop-blur-sm sm:flex-row">
               <button
                 onClick={handleApproveAndGoLive}
-                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors text-sm"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-md hover:brightness-[1.06] active:scale-[0.99]"
               >
+                <Check className="h-4 w-4" />
                 Approve &amp; Go Live
               </button>
               <button
                 onClick={() => commentComposerRef.current?.focus()}
-                className="flex-1 px-4 py-3 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-lg border border-gray-300 transition-colors text-sm"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all duration-200 hover:bg-secondary active:scale-[0.99]"
               >
+                <MessageSquare className="h-4 w-4" />
                 Request Changes
               </button>
             </div>

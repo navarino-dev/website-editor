@@ -25,3 +25,44 @@ export function friendlyStatusColor(status: string): string {
       return "bg-gray-100 text-gray-700";
   }
 }
+
+export interface StatusMeta {
+  label: string;
+  /** Tailwind classes for a soft pill (background + text + ring). */
+  pill: string;
+  /** Tailwind background class for the status dot. */
+  dot: string;
+}
+
+const STATUS_META: Record<string, StatusMeta> = {
+  in_review: {
+    label: "Ready for Review",
+    pill: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200/70",
+    dot: "bg-amber-500",
+  },
+  in_progress: {
+    label: "In Progress",
+    pill: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200/70",
+    dot: "bg-sky-500",
+  },
+  done: {
+    label: "Complete",
+    pill: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200/70",
+    dot: "bg-emerald-500",
+  },
+  blocked: {
+    label: "On Hold",
+    pill: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200/70",
+    dot: "bg-rose-500",
+  },
+};
+
+const PENDING_META: StatusMeta = {
+  label: "Pending",
+  pill: "bg-stone-100 text-stone-600 ring-1 ring-inset ring-stone-200/70",
+  dot: "bg-stone-400",
+};
+
+export function friendlyStatusMeta(status: string): StatusMeta {
+  return STATUS_META[status] ?? PENDING_META;
+}
