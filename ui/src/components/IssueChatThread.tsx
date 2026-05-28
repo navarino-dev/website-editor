@@ -663,7 +663,7 @@ const IssueChatTextPart = memo(function IssueChatTextPart({ text, recessed }: { 
           rel="noopener noreferrer"
           className="group mt-3 flex items-center gap-3 rounded-2xl border border-primary/20 bg-accent/60 p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_10px_28px_-16px_rgba(40,55,45,0.4)]"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <span className="pm-accent-bg flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm">
             <Eye className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">

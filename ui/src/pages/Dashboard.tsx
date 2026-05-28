@@ -94,7 +94,7 @@ function SimplifiedDashboard({
   return (
     <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-14">
       <header className="mb-8">
-        <p className="mb-1.5 text-[13px] font-medium uppercase tracking-[0.14em] text-primary/70">
+        <p className="pm-accent mb-1.5 text-[13px] font-semibold uppercase tracking-[0.14em]">
           {currentProject?.name ?? "Your properties"}
         </p>
         <div className="flex items-end justify-between gap-4">
@@ -131,8 +131,8 @@ function SimplifiedDashboard({
       {needsAttention.length > 0 && (
         <section className="mb-7">
           <div className="mb-3 flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-            <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-600">
+            <Sparkles className="pm-accent h-3.5 w-3.5" />
+            <h2 className="pm-accent text-xs font-semibold uppercase tracking-[0.12em]">
               Needs your review
             </h2>
           </div>
