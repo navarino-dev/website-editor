@@ -59,9 +59,17 @@ export function Sidebar() {
   return (
     <aside className="w-full h-full min-h-0 border-r border-border bg-background flex flex-col">
       {/* Top bar: Company name (bold) + Search — aligned with top sections (no visible border) */}
-      <div className="flex items-center gap-1 px-3 h-12 shrink-0">
-        <SidebarCompanyMenu />
-        {!isSimplified && (
+      {isSimplified ? (
+        <div className="flex items-center px-4 h-16 shrink-0">
+          <img
+            src="/navarino-logo.png"
+            alt="Navarino Property Group"
+            className="h-11 w-auto object-contain"
+          />
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 px-3 h-12 shrink-0">
+          <SidebarCompanyMenu />
           <Button
             asChild
             variant="ghost"
@@ -74,8 +82,8 @@ export function Sidebar() {
               <Search className="h-4 w-4" />
             </NavLink>
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-auto-hide flex flex-col gap-4 pointer-coarse:gap-3 px-3 py-2">
         <div className="flex flex-col gap-1">
