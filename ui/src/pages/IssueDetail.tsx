@@ -3007,15 +3007,41 @@ export function IssueDetail() {
   const handleResumeFromBacklog = useCallback(async () => {
     await updateIssue.mutateAsync({ status: "todo" });
   }, [updateIssue.mutateAsync]);
+  const pendingConfirmation = useMemo(
+    () =>
+      interactions.find(
+        (item): item is RequestConfirmationInteraction =>
+          item.kind === "request_confirmation" && item.status === "pending",
+      ) ?? null,
+    [interactions],
+  );
   const handleApproveAndGoLive = useCallback(async () => {
     if (!issue) return;
+    // The friendly bar is the single confirmation in the simplified view: if the
+    // agent is waiting on a confirmation request, approving resolves it (which
+    // wakes the agent to proceed) rather than leaving a second pending prompt.
+    if (pendingConfirmation) {
+      await acceptInteraction.mutateAsync({ interaction: pendingConfirmation });
+      return;
+    }
     const reviewerAgent = agents?.find((a: any) => a.role === "qa");
     if (reviewerAgent) {
       await issuesApi.update(issue.id, { assigneeAgentId: reviewerAgent.id });
     }
     await issuesApi.addComment(issue.id, "Approved — go live.");
     queryClient.invalidateQueries({ queryKey: queryKeys.issues.detail(issue.id) });
-  }, [issue, agents, queryClient]);
+  }, [issue, pendingConfirmation, acceptInteraction, agents, queryClient]);
+  const handleRequestChanges = useCallback(async () => {
+    // Decline the agent's pending confirmation (so the single flow resolves) and
+    // open the reply box for the property manager to describe the change.
+    if (pendingConfirmation) {
+      const reason = pendingConfirmation.payload.rejectRequiresReason
+        ? "Changes requested — see comment."
+        : undefined;
+      await rejectInteraction.mutateAsync({ interaction: pendingConfirmation, reason });
+    }
+    commentComposerRef.current?.focus();
+  }, [pendingConfirmation, rejectInteraction]);
   const activeRecoveryActionId = issue?.activeRecoveryAction?.id;
   const handleResolveRecoveryAction = useCallback(
     (outcome: import("../components/IssueRecoveryActionCard").RecoveryResolveOutcome) => {
@@ -4031,7 +4057,7 @@ export function IssueDetail() {
                 Approve &amp; Go Live
               </button>
               <button
-                onClick={() => commentComposerRef.current?.focus()}
+                onClick={handleRequestChanges}
                 className="flex flex-1 items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-all duration-200 hover:bg-secondary active:scale-[0.99]"
               >
                 <MessageSquare className="h-4 w-4" />

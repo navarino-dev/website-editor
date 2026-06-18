@@ -29,6 +29,11 @@ vi.mock("@/lib/router", () => ({
   ),
 }));
 
+const mockUseIsSimplifiedView = vi.hoisted(() => vi.fn(() => false));
+vi.mock("../hooks/useIsSimplifiedView", () => ({
+  useIsSimplifiedView: mockUseIsSimplifiedView,
+}));
+
 function renderCard(
   props: Partial<ComponentProps<typeof IssueThreadInteractionCard>> = {},
 ) {
@@ -59,6 +64,7 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
+  mockUseIsSimplifiedView.mockReturnValue(false);
 });
 
 describe("IssueThreadInteractionCard", () => {
@@ -201,6 +207,23 @@ describe("IssueThreadInteractionCard", () => {
     expect(onAcceptInteraction).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "request_confirmation" }),
     );
+  });
+
+  it("hides confirm/decline controls for pending confirmations in the simplified view", () => {
+    mockUseIsSimplifiedView.mockReturnValue(true);
+    const onAcceptInteraction = vi.fn(async () => undefined);
+    const onRejectInteraction = vi.fn(async () => undefined);
+    const host = renderCard({
+      interaction: pendingRequestConfirmationInteraction,
+      onAcceptInteraction,
+      onRejectInteraction,
+    });
+
+    const buttons = Array.from(host.querySelectorAll("button"));
+    expect(buttons.some((b) => b.textContent?.includes("Approve plan"))).toBe(false);
+    expect(buttons.some((b) => b.textContent?.includes("Request revisions"))).toBe(false);
+    // The card still renders as read-only status.
+    expect(host.textContent).toContain("Confirmation");
   });
 
   it("labels accept-only continuation policies in the card header", () => {

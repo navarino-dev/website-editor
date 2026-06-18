@@ -19,6 +19,7 @@ import {
   type SuggestedTaskTreeNode,
 } from "../lib/issue-thread-interactions";
 import { cn, formatDateTime, formatShortDate } from "../lib/utils";
+import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
 import { MarkdownBody } from "./MarkdownBody";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -1026,6 +1027,7 @@ function RequestConfirmationCard({
   interaction,
   onAcceptInteraction,
   onRejectInteraction,
+  simplified = false,
 }: {
   interaction: RequestConfirmationInteraction;
   onAcceptInteraction?: (
@@ -1035,6 +1037,12 @@ function RequestConfirmationCard({
     interaction: RequestConfirmationInteraction,
     reason?: string,
   ) => Promise<void> | void;
+  /**
+   * In the simplified property-manager view the confirm/decline controls are
+   * suppressed — the single "Approve & Go Live" / "Request Changes" bar drives
+   * this interaction instead, so we don't show two competing confirmations.
+   */
+  simplified?: boolean;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [working, setWorking] = useState<"accept" | "reject" | null>(null);
@@ -1109,7 +1117,7 @@ function RequestConfirmationCard({
         </div>
       ) : null}
 
-      {interaction.status === "pending" ? (
+      {interaction.status === "pending" && simplified ? null : interaction.status === "pending" ? (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
@@ -1214,6 +1222,7 @@ export function IssueThreadInteractionCard({
   onSubmitInteractionAnswers,
   onCancelInteraction,
 }: IssueThreadInteractionCardProps) {
+  const isSimplified = useIsSimplifiedView();
   const StatusIcon = statusIcon(interaction.status);
   const styles = statusClasses(interaction.status);
   const createdByLabel = resolveActorLabel({
@@ -1305,6 +1314,7 @@ export function IssueThreadInteractionCard({
             interaction={interaction}
             onAcceptInteraction={onAcceptInteraction}
             onRejectInteraction={onRejectInteraction}
+            simplified={isSimplified}
           />
         )}
       </div>
