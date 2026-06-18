@@ -53,6 +53,12 @@ vi.mock("@/lib/router", () => ({
   useLocation: () => ({ pathname: "/PAP/projects/bravo/issues", search: "", hash: "", state: null }),
 }));
 
+// The simplified-view gate fails safe to the simplified view when board access
+// is unresolved; these tests cover the full-board chrome, so pin it off.
+vi.mock("../hooks/useIsSimplifiedView", () => ({
+  useIsSimplifiedView: () => false,
+}));
+
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
     selectedCompanyId: "company-1",

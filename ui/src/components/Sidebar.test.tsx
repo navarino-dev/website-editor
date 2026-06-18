@@ -40,6 +40,18 @@ vi.mock("../context/DialogContext", () => ({
   }),
 }));
 
+// The simplified-view gate fails safe to the simplified view when board access
+// is unresolved; these tests cover the full-board chrome, so pin it off.
+vi.mock("../hooks/useIsSimplifiedView", () => ({
+  useIsSimplifiedView: () => false,
+}));
+
+// Sidebar runs the simplified theme enforcer, which reaches into ThemeProvider;
+// this suite renders Sidebar in isolation, so stub it out.
+vi.mock("../context/ThemeContext", () => ({
+  useSimplifiedThemeEnforcer: () => {},
+}));
+
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
     selectedCompanyId: "company-1",

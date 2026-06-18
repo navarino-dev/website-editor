@@ -59,6 +59,12 @@ const {
   shouldPreserveComposerViewportMock: vi.fn(),
 }));
 
+// The simplified-view gate fails safe to the simplified view when board access
+// is unresolved; these tests cover the full-board thread, so pin it off.
+vi.mock("../hooks/useIsSimplifiedView", () => ({
+  useIsSimplifiedView: () => false,
+}));
+
 vi.mock("@assistant-ui/react", () => ({
   AssistantRuntimeProvider: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   useAui: () => ({ thread: () => ({ append: appendMock }) }),

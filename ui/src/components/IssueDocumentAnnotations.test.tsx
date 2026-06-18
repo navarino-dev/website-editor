@@ -29,6 +29,12 @@ const mockPendingAnchor = vi.hoisted(() => ({
   selectedText: "should keep the editor",
 }));
 
+// The simplified-view gate fails safe to the simplified view when board access
+// is unresolved; these tests cover the full-board UI, so pin it off.
+vi.mock("../hooks/useIsSimplifiedView", () => ({
+  useIsSimplifiedView: () => false,
+}));
+
 vi.mock("@/api/document-annotations", () => ({
   documentAnnotationsApi: mockAnnotationsApi,
 }));
