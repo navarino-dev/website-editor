@@ -14,14 +14,18 @@ vi.mock("./useCurrentBoardAccess", () => ({
   useCurrentBoardAccess: mockUseCurrentBoardAccess,
 }));
 
-import { useIsSimplifiedView } from "./useIsSimplifiedView";
+import {
+  useIsSimplifiedView,
+  useSimplifiedViewState,
+  type SimplifiedViewState,
+} from "./useIsSimplifiedView";
 
 const COMPANY_ID = "company-1";
 
-function evaluate(): boolean {
-  let captured: boolean | undefined;
+function render<T>(hook: () => T): T {
+  let captured: T | undefined;
   function Probe() {
-    captured = useIsSimplifiedView();
+    captured = hook();
     return null;
   }
   const container = document.createElement("div");
@@ -32,17 +36,31 @@ function evaluate(): boolean {
   act(() => {
     root.unmount();
   });
-  return captured as boolean;
+  return captured as T;
+}
+
+function evaluate(): boolean {
+  return render(useIsSimplifiedView);
+}
+
+function evaluateState(): SimplifiedViewState {
+  return render(useSimplifiedViewState);
 }
 
 function setup(opts: {
   selectedCompanyId?: string | null;
   boardAccess?: unknown;
+  isSuccess?: boolean;
+  failureCount?: number;
 }) {
   mockUseCompany.mockReturnValue({
     selectedCompanyId: opts.selectedCompanyId ?? null,
   });
-  mockUseCurrentBoardAccess.mockReturnValue({ data: opts.boardAccess });
+  mockUseCurrentBoardAccess.mockReturnValue({
+    data: opts.boardAccess,
+    isSuccess: opts.isSuccess ?? opts.boardAccess !== undefined,
+    failureCount: opts.failureCount ?? 0,
+  });
 }
 
 describe("useIsSimplifiedView", () => {
@@ -133,5 +151,43 @@ describe("useIsSimplifiedView", () => {
       },
     });
     expect(evaluate()).toBe(true);
+  });
+
+  describe("isReady", () => {
+    it("is not ready while board access is still loading (first attempt in flight)", () => {
+      setup({
+        selectedCompanyId: COMPANY_ID,
+        boardAccess: undefined,
+        isSuccess: false,
+        failureCount: 0,
+      });
+      expect(evaluateState().isReady).toBe(false);
+    });
+
+    it("is ready once board access has loaded", () => {
+      setup({
+        selectedCompanyId: COMPANY_ID,
+        boardAccess: {
+          isInstanceAdmin: false,
+          memberships: [
+            { companyId: COMPANY_ID, membershipRole: "operator", status: "active" },
+          ],
+        },
+        isSuccess: true,
+      });
+      expect(evaluateState().isReady).toBe(true);
+    });
+
+    it("is ready after a failed attempt so it commits to the fail-safe default", () => {
+      setup({
+        selectedCompanyId: COMPANY_ID,
+        boardAccess: undefined,
+        isSuccess: false,
+        failureCount: 1,
+      });
+      const state = evaluateState();
+      expect(state.isReady).toBe(true);
+      expect(state.isSimplified).toBe(true);
+    });
   });
 });

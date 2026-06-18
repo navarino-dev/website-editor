@@ -26,7 +26,7 @@ import { useCompany } from "../context/CompanyContext";
 import { useSidebar } from "../context/SidebarContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useCompanyPageMemory } from "../hooks/useCompanyPageMemory";
-import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
+import { useSimplifiedViewState } from "../hooks/useIsSimplifiedView";
 import { healthApi } from "../api/health";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { shouldSyncCompanySelectionFromRoute } from "../lib/company-selection";
@@ -64,7 +64,7 @@ function readRememberedInstanceSettingsPath(): string {
 }
 
 export function Layout() {
-  const isSimplified = useIsSimplifiedView();
+  const { isSimplified, isReady: isBoardAccessReady } = useSimplifiedViewState();
   const { sidebarOpen, setSidebarOpen, toggleSidebar, isMobile } = useSidebar();
   const { openNewIssue, openOnboarding } = useDialogActions();
   const { togglePanelVisible } = usePanel();
@@ -348,6 +348,19 @@ export function Layout() {
     if (!shouldResetScroll) return;
     resetNavigationScroll(mainContentRef.current);
   }, [location.pathname, navigationType]);
+
+  // Hold the company board behind a brief loading state until board access
+  // settles, so the role-specific chrome (simplified theme/sidebar vs. the full
+  // admin board) doesn't visibly flip once `/cli-auth/me` resolves. Settings
+  // routes don't depend on the role, so they render immediately.
+  const isCompanyBoardRoute = !isInstanceSettingsRoute && !isCompanySettingsRoute;
+  if (isCompanyBoardRoute && !isBoardAccessReady) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
 
   return (
     <GeneralSettingsProvider value={{ keyboardShortcutsEnabled }}>

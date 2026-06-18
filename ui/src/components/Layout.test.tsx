@@ -155,6 +155,14 @@ vi.mock("../context/PanelContext", () => ({
   }),
 }));
 
+// The simplified-view gate fails safe to the simplified view and holds the
+// board behind a loading state until access settles; these tests cover the
+// resolved full-board layout, so pin it ready + full.
+vi.mock("../hooks/useIsSimplifiedView", () => ({
+  useIsSimplifiedView: () => false,
+  useSimplifiedViewState: () => ({ isSimplified: false, isReady: true }),
+}));
+
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
     companies: mockCompanyState.companies,
