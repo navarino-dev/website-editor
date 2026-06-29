@@ -16,7 +16,8 @@ import {
   logActivity,
   secretService,
 } from "../services/index.js";
-import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
+import { assertBoard, assertCompanyAccess, assertCanApproveSafety, getActorInfo } from "./authz.js";
+import { issueService } from "../services/issues.js";
 import { redactEventPayload } from "../redaction.js";
 import type { PluginWorkerManager } from "../services/plugin-worker-manager.js";
 
@@ -37,6 +38,7 @@ export function approvalRoutes(
     pluginWorkerManager: options.pluginWorkerManager,
   });
   const issueApprovalsSvc = issueApprovalService(db);
+  const issuesSvc = issueService(db);
   const secretsSvc = secretService(db);
   const strictSecretsMode = process.env.PAPERCLIP_SECRETS_STRICT_MODE === "true";
 
@@ -140,6 +142,10 @@ export function approvalRoutes(
       res.status(404).json({ error: "Approval not found" });
       return;
     }
+    const existing = await svc.getById(id);
+    if (existing?.type === "safety_review_required") {
+      assertCanApproveSafety(req, existing.companyId);
+    }
     const decidedByUserId = req.actor.userId ?? "board";
     const { approval, applied } = await svc.approve(id, decidedByUserId, req.body.decisionNote);
 
@@ -161,6 +167,27 @@ export function approvalRoutes(
           linkedIssueIds,
         },
       });
+
+      if (approval.type === "safety_review_required") {
+        const priorStatus =
+          typeof approval.payload?.priorStatus === "string" ? (approval.payload.priorStatus as string) : "todo";
+        const approverName = req.actor.userName ?? req.actor.userEmail ?? "an admin";
+        const linked = await issueApprovalsSvc.listIssuesForApproval(approval.id);
+        for (const iss of linked) {
+          if (iss.status === "blocked") {
+            await issuesSvc.update(iss.id, { status: priorStatus });
+          }
+          await issuesSvc.addComment(
+            iss.id,
+            `**Safety review approved by ${approverName}.** Work resumed.`,
+            {},
+            {
+              authorType: "system",
+              presentation: { kind: "system_notice", tone: "success", title: "Safety review approved", detailsDefaultOpen: false },
+            },
+          );
+        }
+      }
 
       if (approval.requestedByAgentId) {
         try {
@@ -236,6 +263,10 @@ export function approvalRoutes(
       res.status(404).json({ error: "Approval not found" });
       return;
     }
+    const existing = await svc.getById(id);
+    if (existing?.type === "safety_review_required") {
+      assertCanApproveSafety(req, existing.companyId);
+    }
     const decidedByUserId = req.actor.userId ?? "board";
     const { approval, applied } = await svc.reject(id, decidedByUserId, req.body.decisionNote);
 
@@ -249,6 +280,22 @@ export function approvalRoutes(
         entityId: approval.id,
         details: { type: approval.type },
       });
+
+      if (approval.type === "safety_review_required") {
+        const approverName = req.actor.userName ?? req.actor.userEmail ?? "an admin";
+        const linked = await issueApprovalsSvc.listIssuesForApproval(approval.id);
+        for (const iss of linked) {
+          await issuesSvc.addComment(
+            iss.id,
+            `**Safety review declined by ${approverName}.** This change will not proceed.`,
+            {},
+            {
+              authorType: "system",
+              presentation: { kind: "system_notice", tone: "danger", title: "Safety review declined", detailsDefaultOpen: false },
+            },
+          );
+        }
+      }
     }
 
     res.json(redactApprovalPayload(approval));
