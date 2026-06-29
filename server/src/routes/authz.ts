@@ -81,3 +81,20 @@ export function getActorInfo(req: Request) {
     runId: req.actor.runId ?? null,
   };
 }
+
+const SAFETY_APPROVER_ROLES = new Set(["owner", "admin", "manager"]);
+
+export function canApproveSafety(actor: Request["actor"], companyId: string): boolean {
+  if (actor.isInstanceAdmin) return true;
+  if (actor.source === "local_implicit") return true;
+  const memberships = actor.memberships ?? [];
+  return memberships.some(
+    (m) => m.companyId === companyId && m.status === "active" && SAFETY_APPROVER_ROLES.has(m.membershipRole ?? ""),
+  );
+}
+
+export function assertCanApproveSafety(req: Request, companyId: string): void {
+  if (!canApproveSafety(req.actor, companyId)) {
+    throw forbidden("Admin or owner approval required for safety review");
+  }
+}
