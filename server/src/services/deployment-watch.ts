@@ -1,6 +1,7 @@
 // server/src/services/deployment-watch.ts
 import { and, eq, lte } from "drizzle-orm";
 import { deploymentWatches } from "@paperclipai/db";
+import type { IssueCommentPresentation } from "@paperclipai/shared";
 import type { LogActivityInput } from "./activity-log.js";
 import { getLatestProductionDeployStatus } from "./github-deployments.js";
 
@@ -32,7 +33,7 @@ export interface DeploymentWatchDeps {
       issueId: string,
       body: string,
       actor: Actor,
-      options?: { authorType?: string | null },
+      options?: { authorType?: string | null; presentation?: IssueCommentPresentation | null },
     ) => Promise<unknown>;
   };
   projectsSvc: {
@@ -47,9 +48,16 @@ export interface DeploymentWatchDeps {
 
 const SYS_ACTOR: Actor = {};
 
+function makePresentation(tone: IssueCommentPresentation["tone"]): IssueCommentPresentation {
+  return { kind: "system_notice", tone, detailsDefaultOpen: false };
+}
+
 export function createDeploymentWatch(deps: DeploymentWatchDeps) {
-  const post = (issueId: string, body: string) =>
-    deps.issuesSvc.addComment(issueId, body, SYS_ACTOR, { authorType: "system" });
+  const post = (issueId: string, body: string, tone: IssueCommentPresentation["tone"]) =>
+    deps.issuesSvc.addComment(issueId, body, SYS_ACTOR, {
+      authorType: "system",
+      presentation: makePresentation(tone),
+    });
 
   async function onIssueDone(issue: {
     id: string;
@@ -88,7 +96,7 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
       nextCheckAt: now,
     });
 
-    await post(issue.id, PUBLISHING_BODY);
+    await post(issue.id, PUBLISHING_BODY, "info");
   }
 
   async function tick(
@@ -133,14 +141,14 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
           : "pending";
 
         if (state === "success") {
-          await post(w.issueId, LIVE_BODY(w.productionUrl));
+          await post(w.issueId, LIVE_BODY(w.productionUrl), "success");
           await db
             .update(deploymentWatches)
             .set({ status: "live", updatedAt: now })
             .where(eq(deploymentWatches.id, w.id));
           live++;
         } else if (state === "failure") {
-          await post(w.issueId, FAILED_BODY);
+          await post(w.issueId, FAILED_BODY, "danger");
           await deps.logActivity({
             companyId: w.companyId,
             actorType: "system",
@@ -155,7 +163,7 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
             .where(eq(deploymentWatches.id, w.id));
           failed++;
         } else if (now >= w.deadlineAt) {
-          await post(w.issueId, DELAYED_BODY);
+          await post(w.issueId, DELAYED_BODY, "warning");
           await db
             .update(deploymentWatches)
             .set({ status: "delayed", updatedAt: now })

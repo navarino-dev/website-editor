@@ -151,7 +151,7 @@ describe("createDeploymentWatch", () => {
         "issue-1",
         PUBLISHING_BODY,
         {},
-        { authorType: "system" },
+        { authorType: "system", presentation: { kind: "system_notice", tone: "info", detailsDefaultOpen: false } },
       );
     });
 
@@ -214,7 +214,7 @@ describe("createDeploymentWatch", () => {
         "issue-1",
         LIVE_BODY("https://example.com"),
         {},
-        { authorType: "system" },
+        { authorType: "system", presentation: { kind: "system_notice", tone: "success", detailsDefaultOpen: false } },
       );
       expect(updatedSets).toHaveLength(1);
       expect(updatedSets[0]?.values).toMatchObject({ status: "live" });
@@ -237,7 +237,7 @@ describe("createDeploymentWatch", () => {
         "issue-1",
         DELAYED_BODY,
         {},
-        { authorType: "system" },
+        { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
       );
       expect(updatedSets[0]?.values).toMatchObject({ status: "delayed" });
     });
@@ -258,7 +258,7 @@ describe("createDeploymentWatch", () => {
         "issue-1",
         FAILED_BODY,
         {},
-        { authorType: "system" },
+        { authorType: "system", presentation: { kind: "system_notice", tone: "danger", detailsDefaultOpen: false } },
       );
       expect(logActivity).toHaveBeenCalledOnce();
       expect(logActivity).toHaveBeenCalledWith(
@@ -330,7 +330,7 @@ describe("createDeploymentWatch", () => {
         "issue-2",
         LIVE_BODY("https://example.com"),
         {},
-        { authorType: "system" },
+        { authorType: "system", presentation: { kind: "system_notice", tone: "success", detailsDefaultOpen: false } },
       );
     });
   });

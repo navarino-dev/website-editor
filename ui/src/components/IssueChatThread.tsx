@@ -133,7 +133,7 @@ import { cn, formatDateTime, formatShortDate } from "../lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, ArrowRight, ArrowUpRight, Brain, Check, ChevronDown, ClipboardList, Copy, Eye, Hammer, Loader2, MoreHorizontal, Paperclip, PauseCircle, Search, Square, ThumbsDown, ThumbsUp } from "lucide-react";
+import { AlertTriangle, ArrowRight, ArrowUpRight, Brain, Check, ChevronDown, ClipboardList, Copy, Eye, Hammer, Loader2, MoreHorizontal, Paperclip, PauseCircle, Search, Sparkles, Square, ThumbsDown, ThumbsUp } from "lucide-react";
 import { IssueBlockedNotice } from "./IssueBlockedNotice";
 import { IssueAssignedBacklogNotice } from "./IssueAssignedBacklogNotice";
 import { IssueRecoveryActionCard, type RecoveryResolveOutcome } from "./IssueRecoveryActionCard";
@@ -638,6 +638,11 @@ function commentDateLabel(date: Date | string | undefined): string {
 function extractPreviewUrl(body: string): string | null {
   const match = body.match(/https:\/\/[^\s)]+\.vercel\.app[^\s)]*/);
   return match ? match[0] : null;
+}
+
+function extractLiveUrl(body: string): string | null {
+  const match = body.match(/^LIVE_URL:\s*(https?:\/\/\S+)/im);
+  return match ? match[1] : null;
 }
 
 const IssueChatTextPart = memo(function IssueChatTextPart({ text, recessed }: { text: string; recessed?: boolean }) {
@@ -2332,10 +2337,15 @@ function SystemNoticeCommentRow({
   const runId = typeof custom.runId === "string" ? custom.runId : null;
   const authorType = typeof custom.authorType === "string" ? custom.authorType : null;
   const authorName = typeof custom.authorName === "string" ? custom.authorName : null;
+  const isSimplified = useIsSimplifiedView();
   const bodyText = message.content
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
     .map((p) => p.text)
     .join("\n\n");
+  const liveUrl = extractLiveUrl(bodyText);
+  const displayBody = liveUrl
+    ? bodyText.replace(/^LIVE_URL:\s*\S+\s*$/gim, "").trim()
+    : bodyText;
   const staleSuccessfulRunHandoffNotice = isStaleSuccessfulRunHandoffNotice({
     bodyText,
     issueStatus,
@@ -2360,13 +2370,46 @@ function SystemNoticeCommentRow({
     return undefined;
   })();
 
+  const liveCard = liveUrl ? (
+    isSimplified ? (
+      <a
+        href={liveUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 flex items-center gap-3 rounded-lg border border-orange-300/60 bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 shadow-[0_0_12px_2px_rgba(251,146,60,0.25)] ring-1 ring-orange-200/80 transition-shadow hover:shadow-[0_0_18px_4px_rgba(251,146,60,0.35)] dark:border-orange-500/40 dark:from-orange-950/40 dark:to-amber-950/40 dark:ring-orange-600/40"
+      >
+        <Sparkles className="h-4 w-4 shrink-0 text-orange-500" />
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-orange-700 dark:text-orange-300">Your change is live</span>
+          <span className="block truncate text-xs text-orange-600/80 dark:text-orange-400/80">{liveUrl.replace(/^https?:\/\//, "")}</span>
+        </span>
+        <ArrowUpRight className="h-4 w-4 shrink-0 text-orange-500 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+      </a>
+    ) : (
+      <a
+        href={liveUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-2 flex items-center gap-1.5 text-xs text-primary hover:underline"
+      >
+        <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+        {liveUrl}
+      </a>
+    )
+  ) : null;
+
   const props = buildSystemNoticeProps({
     presentation,
     metadata: commentMetadata,
     body: (
-      <MarkdownBody className="text-sm leading-6" softBreaks onImageClick={onImageClick}>
-        {bodyText}
-      </MarkdownBody>
+      <>
+        {displayBody && (
+          <MarkdownBody className="text-sm leading-6" softBreaks onImageClick={onImageClick}>
+            {displayBody}
+          </MarkdownBody>
+        )}
+        {liveCard}
+      </>
     ),
     timestamp: message.createdAt ? new Date(message.createdAt).toISOString() : undefined,
     source,

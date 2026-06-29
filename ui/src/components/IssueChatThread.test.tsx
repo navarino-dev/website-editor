@@ -2805,4 +2805,70 @@ describe("IssueChatThread", () => {
 
     expect(allTextPartsHiddenInSimplifiedView(messageWithImageOnly)).toBe(false);
   });
+
+  describe("system_notice live-URL card (deployment-watch)", () => {
+    async function renderSystemNoticeThread(body: string, isSimplified = true) {
+      const root = createRoot(container);
+      if (isSimplified) {
+        mockUseIsSimplifiedView.mockReturnValue(true);
+      }
+      await act(async () => {
+        root.render(
+          <MemoryRouter>
+            <IssueChatThread
+              comments={[{
+                id: "comment-live-url-test",
+                companyId: "company-1",
+                issueId: "issue-1",
+                authorType: "system" as const,
+                authorAgentId: null,
+                authorUserId: null,
+                body,
+                presentation: {
+                  kind: "system_notice" as const,
+                  tone: "success" as const,
+                  detailsDefaultOpen: false,
+                },
+                metadata: null,
+                createdAt: new Date("2026-06-29T12:00:00.000Z"),
+                updatedAt: new Date("2026-06-29T12:00:00.000Z"),
+              }]}
+              linkedRuns={[]}
+              timelineEvents={[]}
+              liveRuns={[]}
+              onAdd={async () => {}}
+              showComposer={false}
+              enableLiveTranscriptPolling={false}
+            />
+          </MemoryRouter>,
+        );
+      });
+      return { container, root };
+    }
+
+    it("renders a link with the live URL in simplified view", async () => {
+      const { container: c } = await renderSystemNoticeThread(
+        "✨ Your change is now live.\n\nLIVE_URL: https://seasidehoa.com",
+        true,
+      );
+      const link = c.querySelector('a[href="https://seasidehoa.com"]');
+      expect(link).not.toBeNull();
+    });
+
+    it("shows the domain in visible text in simplified view", async () => {
+      const { container: c } = await renderSystemNoticeThread(
+        "✨ Your change is now live.\n\nLIVE_URL: https://seasidehoa.com",
+        true,
+      );
+      expect(c.textContent).toContain("seasidehoa.com");
+    });
+
+    it("does not render the raw LIVE_URL: marker in the DOM", async () => {
+      const { container: c } = await renderSystemNoticeThread(
+        "✨ Your change is now live.\n\nLIVE_URL: https://seasidehoa.com",
+        true,
+      );
+      expect(c.textContent).not.toContain("LIVE_URL:");
+    });
+  });
 });
