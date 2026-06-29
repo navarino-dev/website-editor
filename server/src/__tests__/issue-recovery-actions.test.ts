@@ -26,6 +26,10 @@ import { issueRoutes } from "../routes/issues.js";
 import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
 import { recoveryService } from "../services/recovery/service.js";
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 
