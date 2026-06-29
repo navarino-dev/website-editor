@@ -145,6 +145,7 @@ describe("safety-review approval routes", () => {
       const app = await createApp(adminOverrides);
       const res = await request(app).post("/api/approvals/approval-safety-1/approve").send({});
       expect(res.status).toBe(200);
+      expect(mockApprovalService.approve).toHaveBeenCalledOnce();
       expect(mockIssueService.update).toHaveBeenCalledWith(blockedIssue.id, { status: "todo" });
     });
 

@@ -138,12 +138,12 @@ export function approvalRoutes(
   router.post("/approvals/:id/approve", validate(resolveApprovalSchema), async (req, res) => {
     assertBoard(req);
     const id = req.params.id as string;
-    if (!(await requireApprovalAccess(req, id))) {
+    const existing = await requireApprovalAccess(req, id);
+    if (!existing) {
       res.status(404).json({ error: "Approval not found" });
       return;
     }
-    const existing = await svc.getById(id);
-    if (existing?.type === "safety_review_required") {
+    if (existing.type === "safety_review_required") {
       assertCanApproveSafety(req, existing.companyId);
     }
     const decidedByUserId = req.actor.userId ?? "board";
@@ -172,8 +172,7 @@ export function approvalRoutes(
         const priorStatus =
           typeof approval.payload?.priorStatus === "string" ? (approval.payload.priorStatus as string) : "todo";
         const approverName = req.actor.userName ?? req.actor.userEmail ?? "an admin";
-        const linked = await issueApprovalsSvc.listIssuesForApproval(approval.id);
-        for (const iss of linked) {
+        for (const iss of linkedIssues) {
           if (iss.status === "blocked") {
             await issuesSvc.update(iss.id, { status: priorStatus });
           }
@@ -259,12 +258,12 @@ export function approvalRoutes(
   router.post("/approvals/:id/reject", validate(resolveApprovalSchema), async (req, res) => {
     assertBoard(req);
     const id = req.params.id as string;
-    if (!(await requireApprovalAccess(req, id))) {
+    const existing = await requireApprovalAccess(req, id);
+    if (!existing) {
       res.status(404).json({ error: "Approval not found" });
       return;
     }
-    const existing = await svc.getById(id);
-    if (existing?.type === "safety_review_required") {
+    if (existing.type === "safety_review_required") {
       assertCanApproveSafety(req, existing.companyId);
     }
     const decidedByUserId = req.actor.userId ?? "board";
