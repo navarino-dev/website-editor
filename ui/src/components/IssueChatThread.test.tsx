@@ -61,9 +61,9 @@ const {
 
 // The simplified-view gate fails safe to the simplified view when board access
 // is unresolved; these tests cover the full-board thread, so pin it off.
-vi.mock("../hooks/useIsSimplifiedView", () => ({
-  useIsSimplifiedView: () => false,
-}));
+// Hoisted so individual tests can flip it to true (e.g. PM de-jargon tests).
+const mockUseIsSimplifiedView = vi.hoisted(() => vi.fn(() => false));
+vi.mock("../hooks/useIsSimplifiedView", () => ({ useIsSimplifiedView: mockUseIsSimplifiedView }));
 
 vi.mock("@assistant-ui/react", () => ({
   AssistantRuntimeProvider: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -318,7 +318,42 @@ describe("IssueChatThread", () => {
     restoreComposerViewportSnapshotMock.mockClear();
     shouldPreserveComposerViewportMock.mockClear();
     markdownBodyRenderMock.mockClear();
+    // Reset the simplified-view gate so pre-existing tests are unaffected.
+    mockUseIsSimplifiedView.mockReturnValue(false);
   });
+
+  // Helper: render a single agent-authored text comment and return { container }.
+  async function renderThreadWithComment(body: string) {
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <IssueChatThread
+            comments={[{
+              id: "comment-pm-test",
+              companyId: "company-1",
+              issueId: "issue-1",
+              authorAgentId: "agent-1",
+              authorUserId: null,
+              body,
+              authorType: "agent" as const,
+              presentation: null,
+              metadata: null,
+              createdAt: new Date("2026-04-06T12:00:00.000Z"),
+              updatedAt: new Date("2026-04-06T12:00:00.000Z"),
+            }]}
+            linkedRuns={[]}
+            timelineEvents={[]}
+            liveRuns={[]}
+            onAdd={async () => {}}
+            showComposer={false}
+            enableLiveTranscriptPolling={false}
+          />
+        </MemoryRouter>,
+      );
+    });
+    return { container, root };
+  }
 
   it("drops the count heading and does not use an internal scrollbox", () => {
     const root = createRoot(container);
@@ -2708,5 +2743,24 @@ describe("IssueChatThread", () => {
       authorName: "Alice",
       avatarUrl: "/avatars/alice.png",
     });
+  });
+
+  it("hides internal status-noise agent comments in the simplified view", async () => {
+    mockUseIsSimplifiedView.mockReturnValue(true);
+    const { container: c } = await renderThreadWithComment(
+      "Nothing to action this heartbeat. NAV-23 remains in_review pending confirmation.",
+    );
+    expect(c.textContent).not.toContain("Nothing to action");
+    expect(c.textContent).not.toContain("in_review");
+  });
+
+  it("strips GitHub links from shown agent comments in the simplified view", async () => {
+    mockUseIsSimplifiedView.mockReturnValue(true);
+    const { container: c } = await renderThreadWithComment(
+      "Added the page.\n**PR:** https://github.com/x/y/pull/3\nLet me know if it looks good.",
+    );
+    expect(c.textContent).toContain("Added the page.");
+    expect(c.textContent).toContain("Let me know if it looks good.");
+    expect(c.textContent).not.toContain("github.com");
   });
 });

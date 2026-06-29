@@ -138,6 +138,7 @@ import { IssueBlockedNotice } from "./IssueBlockedNotice";
 import { IssueAssignedBacklogNotice } from "./IssueAssignedBacklogNotice";
 import { IssueRecoveryActionCard, type RecoveryResolveOutcome } from "./IssueRecoveryActionCard";
 import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
+import { dejargonComment } from "../lib/pm-comment-display";
 
 interface IssueChatMessageContext {
   feedbackDataSharingPreference: FeedbackDataSharingPreference;
@@ -645,17 +646,30 @@ const IssueChatTextPart = memo(function IssueChatTextPart({ text, recessed }: { 
   if (isSuccessfulRunHandoffComment(text)) {
     return <SuccessfulRunHandoffCommentCallout text={text} recessed={recessed} onImageClick={onImageClick} />;
   }
+  const display = isSimplified
+    ? dejargonComment(text)
+    : { hidden: false, cleanedText: text };
   const previewUrl = isSimplified ? extractPreviewUrl(text) : null;
+
+  // If the comment is pure noise AND has no card to show, render nothing.
+  if (display.hidden && !previewUrl) {
+    return null;
+  }
+
+  const bodyText = display.hidden ? "" : display.cleanedText;
+
   return (
     <>
-      <MarkdownBody
-        className="text-sm leading-6"
-        style={recessed ? { opacity: 0.55 } : undefined}
-        softBreaks
-        onImageClick={onImageClick}
-      >
-        {text}
-      </MarkdownBody>
+      {bodyText && (
+        <MarkdownBody
+          className="text-sm leading-6"
+          style={recessed ? { opacity: 0.55 } : undefined}
+          softBreaks
+          onImageClick={onImageClick}
+        >
+          {bodyText}
+        </MarkdownBody>
+      )}
       {previewUrl && (
         <a
           href={previewUrl}
