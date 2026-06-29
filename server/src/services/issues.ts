@@ -81,6 +81,21 @@ import { classifyIssueGraphLiveness, type IssueLivenessFinding } from "./recover
 
 const ALL_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const MAX_ISSUE_COMMENT_PAGE_LIMIT = 500;
+
+// Module-level late-binding ref for the deployment-watch service.
+// Mirrors the setPluginEventBus pattern in activity-log.ts: wired after both
+// issueService and deploymentWatch are constructed to break the circular dep.
+let _deploymentWatch: {
+  onIssueDone: (issue: { id: string; companyId: string; projectId: string | null }) => Promise<void>;
+} | null = null;
+
+export function setDeploymentWatch(
+  watch: {
+    onIssueDone: (issue: { id: string; companyId: string; projectId: string | null }) => Promise<void>;
+  } | null,
+): void {
+  _deploymentWatch = watch;
+}
 export const ISSUE_LIST_DEFAULT_LIMIT = 500;
 export const ISSUE_LIST_MAX_LIMIT = 1000;
 const ISSUE_LIST_RELATED_QUERY_CHUNK_SIZE = 500;
@@ -4589,7 +4604,15 @@ export function issueService(db: Db) {
         return enriched;
       };
 
-      return dbOrTx === db ? db.transaction(runUpdate) : runUpdate(dbOrTx);
+      const result = await (dbOrTx === db ? db.transaction(runUpdate) : runUpdate(dbOrTx));
+      if (result && issueData.status === "done") {
+        void _deploymentWatch?.onIssueDone({
+          id: result.id,
+          companyId: result.companyId,
+          projectId: result.projectId ?? null,
+        });
+      }
+      return result;
     },
 
     clearExecutionWorkspaceEnvironmentSelection: async (companyId: string, environmentId: string) => {

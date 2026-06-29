@@ -34,10 +34,15 @@ import {
   backfillPrincipalAccessCompatibility,
   heartbeatService,
   instanceSettingsService,
+  issueService,
+  logActivity,
+  projectService,
   reconcileCloudUpstreamRunsOnStartup,
   reconcilePersistedRuntimeServicesOnStartup,
   routineService,
 } from "./services/index.js";
+import { createDeploymentWatch } from "./services/deployment-watch.js";
+import { setDeploymentWatch } from "./services/issues.js";
 import { createFeedbackTraceShareClientFromConfig } from "./services/feedback-share-client.js";
 import { buildRuntimeApiCandidateUrls, choosePrimaryRuntimeApiUrl } from "./runtime-api.js";
 import { createPluginWorkerManager } from "./services/plugin-worker-manager.js";
@@ -719,6 +724,15 @@ export async function startServer(): Promise<StartedServer> {
   if (config.heartbeatSchedulerEnabled) {
     const heartbeat = heartbeatService(db as any, { pluginWorkerManager });
     const routines = routineService(db as any, { pluginWorkerManager });
+    const deploymentWatch = createDeploymentWatch({
+      db: db as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      issuesSvc: issueService(db as any) as any,
+      projectsSvc: projectService(db as any),
+      logActivity: (input) => logActivity(db as any, input),
+      getToken: () => process.env.GITHUB_TOKEN,
+    });
+    setDeploymentWatch(deploymentWatch);
   
     // Reap orphaned running runs at startup while in-memory execution state is empty,
     // then resume any persisted queued runs that were waiting on the previous process.
@@ -785,7 +799,16 @@ export async function startServer(): Promise<StartedServer> {
         .catch((err) => {
           logger.error({ err }, "routine scheduler tick failed");
         });
-  
+
+      void deploymentWatch
+        .tick(new Date())
+        .then((r) => {
+          if (r.live + r.delayed + r.failed > 0) {
+            logger.info({ ...r }, "deployment watch tick posted updates");
+          }
+        })
+        .catch((err) => logger.error({ err }, "deployment watch tick failed"));
+
       // Periodically reap orphaned runs (5-min staleness threshold) and make sure
       // persisted queued work is still being driven forward.
       void heartbeat
