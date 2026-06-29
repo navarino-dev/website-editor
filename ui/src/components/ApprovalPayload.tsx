@@ -6,6 +6,7 @@ export const typeLabel: Record<string, string> = {
   approve_ceo_strategy: "CEO Strategy",
   budget_override_required: "Budget Override",
   request_board_approval: "Board Approval",
+  safety_review_required: "Safety Review",
 };
 
 function firstNonEmptyString(...values: unknown[]): string | null {
@@ -41,6 +42,7 @@ export const typeIcon: Record<string, typeof UserPlus> = {
   approve_ceo_strategy: Lightbulb,
   budget_override_required: ShieldAlert,
   request_board_approval: ShieldCheck,
+  safety_review_required: ShieldAlert,
 };
 
 export const defaultTypeIcon = ShieldCheck;
@@ -229,6 +231,43 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
   );
 }
 
+function SafetyReviewPayload({ payload }: { payload: Record<string, unknown> }) {
+  const score = typeof payload.score === "number" ? payload.score : null;
+  const reasoning = typeof payload.reasoning === "string" ? payload.reasoning : "";
+  const factors = Array.isArray(payload.factors)
+    ? (payload.factors as unknown[]).map(String).filter(Boolean)
+    : [];
+  return (
+    <div className="mt-3 space-y-3 text-sm">
+      {score !== null && (
+        <div className="rounded-lg border border-border/60 bg-muted/40 px-3.5 py-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Safety score</p>
+          <p className="mt-1 text-lg font-semibold text-foreground">{score}/10</p>
+        </div>
+      )}
+      {reasoning && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Reasoning</p>
+          <p className="leading-6 text-foreground/90">{reasoning}</p>
+        </div>
+      )}
+      {factors.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Factors</p>
+          <ul className="space-y-1 text-sm text-muted-foreground">
+            {factors.map((f, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="mt-2 h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                <span className="leading-6">{f}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ApprovalPayloadRenderer({
   type,
   payload,
@@ -243,5 +282,6 @@ export function ApprovalPayloadRenderer({
   if (type === "request_board_approval") {
     return <BoardApprovalPayload payload={payload} hideTitle={hidePrimaryTitle} />;
   }
+  if (type === "safety_review_required") return <SafetyReviewPayload payload={payload} />;
   return <CeoStrategyPayload payload={payload} />;
 }

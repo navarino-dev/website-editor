@@ -85,4 +85,32 @@ describe("ApprovalPayloadRenderer", () => {
       root.unmount();
     });
   });
+
+  it("labels and renders a safety_review_required payload with the score and reasoning", () => {
+    expect(approvalLabel("safety_review_required")).toBe("Safety Review");
+
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <ApprovalPayloadRenderer
+          type="safety_review_required"
+          payload={{
+            score: 8,
+            reasoning: "Touches a backend service",
+            factors: ["backend", "multi-page"],
+            priorStatus: "todo",
+          }}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("8/10");
+    expect(container.textContent).toContain("Touches a backend service");
+    expect(container.textContent).toContain("backend");
+
+    act(() => {
+      root.unmount();
+    });
+  });
 });
