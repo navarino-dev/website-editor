@@ -44,6 +44,7 @@ export type ProjectFieldSaveState = "idle" | "saving" | "saved" | "error";
 export type ProjectConfigFieldKey =
   | "name"
   | "description"
+  | "productionUrl"
   | "status"
   | "goals"
   | "env"
@@ -537,6 +538,19 @@ export function ProjectProperties({ project, onUpdate, onFieldUpdate, getFieldSa
             <p className="text-sm text-muted-foreground">
               {project.description?.trim() || "No description"}
             </p>
+          )}
+        </PropertyRow>
+        <PropertyRow label={<FieldLabel label="Live website URL" state={fieldState("productionUrl")} />}>
+          {onUpdate || onFieldUpdate ? (
+            <DraftInput
+              value={project.productionUrl ?? ""}
+              onCommit={(value) => commitField("productionUrl", { productionUrl: value || null })}
+              immediate
+              className="w-full rounded border border-border bg-transparent px-2 py-1 text-sm outline-none"
+              placeholder="https://example.com"
+            />
+          ) : (
+            <span className="text-sm">{project.productionUrl ?? "—"}</span>
           )}
         </PropertyRow>
         <PropertyRow label={<FieldLabel label="Status" state={fieldState("status")} />}>

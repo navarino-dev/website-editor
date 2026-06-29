@@ -151,6 +151,7 @@ function makeProject(overrides: Partial<Project>): Project {
     leadAgentId: null,
     targetDate: null,
     color: "#ef4444",
+    productionUrl: null,
     env: null,
     pauseReason: null,
     pausedAt: null,
