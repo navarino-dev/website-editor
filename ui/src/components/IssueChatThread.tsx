@@ -646,10 +646,24 @@ const IssueChatTextPart = memo(function IssueChatTextPart({ text, recessed }: { 
   if (isSuccessfulRunHandoffComment(text)) {
     return <SuccessfulRunHandoffCommentCallout text={text} recessed={recessed} onImageClick={onImageClick} />;
   }
-  const display = isSimplified
-    ? dejargonComment(text)
-    : { hidden: false, cleanedText: text };
-  const previewUrl = isSimplified ? extractPreviewUrl(text) : null;
+
+  // Admin (non-simplified) view: render verbatim, exactly as before this branch.
+  if (!isSimplified) {
+    return (
+      <MarkdownBody
+        className="text-sm leading-6"
+        style={recessed ? { opacity: 0.55 } : undefined}
+        softBreaks
+        onImageClick={onImageClick}
+      >
+        {text}
+      </MarkdownBody>
+    );
+  }
+
+  // Simplified (PM) view: apply dejargon and show preview card when available.
+  const display = dejargonComment(text);
+  const previewUrl = extractPreviewUrl(text);
 
   // If the comment is pure noise AND has no card to show, render nothing.
   if (display.hidden && !previewUrl) {
@@ -1463,6 +1477,23 @@ function IssueChatUserMessage({
   );
 }
 
+// C1: Returns true when every text part in the message would be suppressed by
+// dejargon in the simplified view AND there is no preview card to show.
+// Non-text parts (CoT, tool-calls) are not text parts so they are handled by
+// the hasCoT guard in the caller.
+function allTextPartsHiddenInSimplifiedView(message: ThreadMessage): boolean {
+  const textParts = message.content.filter(
+    (p): p is TextMessagePart => p.type === "text",
+  );
+  if (textParts.length === 0) return true;
+  return textParts.every((p) => {
+    // Handoff callout is always visible.
+    if (isSuccessfulRunHandoffComment(p.text)) return false;
+    const { hidden } = dejargonComment(p.text);
+    return hidden && !extractPreviewUrl(p.text);
+  });
+}
+
 function IssueChatAssistantMessage({
   message,
   activeVote,
@@ -1484,6 +1515,7 @@ function IssueChatAssistantMessage({
     stoppingRunLabel = "Stopping...",
     stopRunVariant = "stop",
   } = useContext(IssueChatCtx);
+  const isSimplified = useIsSimplifiedView();
   const custom = message.metadata.custom as Record<string, unknown>;
   const anchorId = typeof custom.anchorId === "string" ? custom.anchorId : undefined;
   const authorName = typeof custom.authorName === "string"
@@ -1539,6 +1571,22 @@ function IssueChatAssistantMessage({
   };
 
   const followUpRequested = custom.followUpRequested === true;
+
+  // C1: In the simplified PM view, suppress the entire bubble (avatar + author
+  // name + controls) when there is nothing visible to show. We only do this
+  // when the message is fully quiescent (not running, no waiting indicator, no
+  // notices, no chain-of-thought) so active runs and interactive states always
+  // stay visible.
+  if (
+    isSimplified &&
+    !isRunning &&
+    !waitingText &&
+    notices.length === 0 &&
+    !hasCoT &&
+    allTextPartsHiddenInSimplifiedView(message)
+  ) {
+    return null;
+  }
 
   return (
     <div id={anchorId}>

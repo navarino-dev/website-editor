@@ -36,4 +36,26 @@ describe("dejargonComment", () => {
     const input = "https://github.com/navarino-dev/seaside-website/pull/3";
     expect(dejargonComment(input).hidden).toBe(true);
   });
+
+  // I1: "pending confirmation" is a natural phrase, not a machine marker.
+  it("does not hide a friendly message containing 'pending confirmation'", () => {
+    const input =
+      "I've updated the homepage banner. It's live pending confirmation from you — let me know!";
+    expect(dejargonComment(input).hidden).toBe(false);
+  });
+
+  // I3: inline PR reference removal.
+  it("removes inline PR references but keeps the surrounding sentence", () => {
+    const input = "Changes are ready — PR #3 has been created for review.";
+    const { hidden, cleanedText } = dejargonComment(input);
+    expect(hidden).toBe(false);
+    expect(cleanedText).not.toContain("PR #3");
+  });
+
+  // I3: in_progress softening.
+  it("softens in_progress status token", () => {
+    const input = "The task is currently in_progress.";
+    expect(dejargonComment(input).cleanedText).toContain("in progress");
+    expect(dejargonComment(input).cleanedText).not.toContain("in_progress");
+  });
 });

@@ -2763,4 +2763,29 @@ describe("IssueChatThread", () => {
     expect(c.textContent).toContain("Let me know if it looks good.");
     expect(c.textContent).not.toContain("github.com");
   });
+
+  // C1: the entire bubble (avatar + author name + controls) must be absent —
+  // not merely the noise text — when all content is suppressed in simplified view.
+  it("hides the entire agent bubble in simplified view when all content is noise (C1)", async () => {
+    mockUseIsSimplifiedView.mockReturnValue(true);
+    const { container: c } = await renderThreadWithComment(
+      "No new human comments this heartbeat.",
+    );
+    // Author name defaults to "Agent" when no agentMap is provided.
+    expect(c.textContent).not.toContain("Agent");
+    // The message row may exist but must be completely empty.
+    const messageRows = c.querySelectorAll('[data-testid="issue-chat-message-row"]');
+    for (const row of Array.from(messageRows)) {
+      expect((row as HTMLElement).textContent).toBe("");
+    }
+  });
+
+  // M1: admin (non-simplified) view must render in_review and github.com verbatim.
+  it("renders admin view verbatim without stripping in_review or github.com links (M1)", async () => {
+    // mockUseIsSimplifiedView defaults to false — admin path.
+    const body = "Issue NAV-23 remains in_review. See https://github.com/x/y/pull/7 for details.";
+    const { container: c } = await renderThreadWithComment(body);
+    expect(c.textContent).toContain("in_review");
+    expect(c.textContent).toContain("github.com");
+  });
 });

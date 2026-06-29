@@ -60,7 +60,7 @@ This ALSO includes: when you are woken up with reason "approval_approved" or a c
 
 Do these steps and NOTHING ELSE:
 
-1. Post a comment: "Handing off to Reviewer for merge verification."
+1. Post a comment: "Great — I'm getting this published for you now."
 2. Reassign the issue to the Reviewer agent.
 3. STOP. Do not merge. Do not touch the code. Do not mark the issue done.
 
