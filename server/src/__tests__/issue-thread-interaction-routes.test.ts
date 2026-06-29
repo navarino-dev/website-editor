@@ -36,12 +36,12 @@ vi.mock("../telemetry.js", () => ({
   getTelemetryClient: vi.fn(() => ({ track: vi.fn() })),
 }));
 
-function registerModuleMocks() {
-  vi.mock("../services/safety-gate.js", () => ({
+vi.mock("../services/safety-gate.js", () => ({
   evaluateAndGate: vi.fn(async () => ({ gated: false })),
 }));
 
-vi.doMock("../services/index.js", () => ({
+function registerModuleMocks() {
+  vi.doMock("../services/index.js", () => ({
     companyService: () => ({
       getById: vi.fn(async () => ({ id: "company-1", attachmentMaxBytes: 10 * 1024 * 1024 })),
     }),

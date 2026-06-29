@@ -37,6 +37,10 @@ const mockProjectService = vi.hoisted(() => ({
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 function registerServiceMocks() {
   vi.doMock("../routes/authz.js", async () => vi.importActual("../routes/authz.js"));
 
@@ -73,11 +77,7 @@ function registerServiceMocks() {
     projectService: () => mockProjectService,
   }));
 
-  vi.mock("../services/safety-gate.js", () => ({
-  evaluateAndGate: vi.fn(async () => ({ gated: false })),
-}));
-
-vi.doMock("../services/index.js", () => ({
+  vi.doMock("../services/index.js", () => ({
     companyService: () => ({
       getById: vi.fn(async () => ({ id: "company-1", attachmentMaxBytes: 10 * 1024 * 1024 })),
     }),

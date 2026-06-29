@@ -45,6 +45,10 @@ const mockRoutineService = vi.hoisted(() => ({
   syncRunStatusForIssue: vi.fn(async () => undefined),
 }));
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 function registerModuleMocks() {
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
@@ -74,11 +78,7 @@ function registerModuleMocks() {
     routineService: () => mockRoutineService,
   }));
 
-  vi.mock("../services/safety-gate.js", () => ({
-  evaluateAndGate: vi.fn(async () => ({ gated: false })),
-}));
-
-vi.doMock("../services/index.js", () => ({
+  vi.doMock("../services/index.js", () => ({
     companyService: () => ({
       getById: vi.fn(async () => ({ id: "company-1", attachmentMaxBytes: 10 * 1024 * 1024 })),
     }),

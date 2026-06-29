@@ -16,6 +16,10 @@ const mockCompanyService = vi.hoisted(() => ({
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 function registerRouteMocks() {
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
@@ -34,11 +38,7 @@ function registerRouteMocks() {
     logActivity: mockLogActivity,
   }));
 
-  vi.mock("../services/safety-gate.js", () => ({
-  evaluateAndGate: vi.fn(async () => ({ gated: false })),
-}));
-
-vi.doMock("../services/index.js", () => ({
+  vi.doMock("../services/index.js", () => ({
     accessService: () => ({
       canUser: vi.fn(),
       hasPermission: vi.fn(),

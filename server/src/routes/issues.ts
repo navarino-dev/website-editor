@@ -3594,7 +3594,7 @@ export function issueRoutes(
             companyId,
             issue: { id: issue.id, status: issue.status, assigneeAgentId: issue.assigneeAgentId, title: issue.title },
             requestText: [issue.title, req.body.description].filter(Boolean).join("\n"),
-            requesterUserId: actor.actorType === "user" ? actor.actorId : null,
+            requesterUserId: actor.actorId,
           },
           { issuesSvc: svc, approvalsSvc, issueApprovalsSvc },
         );

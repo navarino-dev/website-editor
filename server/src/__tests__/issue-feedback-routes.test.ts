@@ -71,6 +71,10 @@ const mockIssueReferenceService = vi.hoisted(() => ({
   syncIssue: vi.fn(async () => undefined),
 }));
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 function registerModuleMocks() {
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
@@ -81,11 +85,7 @@ function registerModuleMocks() {
     getTelemetryClient: vi.fn(() => ({ track: vi.fn() })),
   }));
 
-  vi.mock("../services/safety-gate.js", () => ({
-  evaluateAndGate: vi.fn(async () => ({ gated: false })),
-}));
-
-vi.doMock("../services/index.js", () => ({
+  vi.doMock("../services/index.js", () => ({
     companyService: () => ({
       getById: vi.fn(async () => ({ id: "company-1", attachmentMaxBytes: 10 * 1024 * 1024 })),
     }),

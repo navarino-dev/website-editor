@@ -106,12 +106,12 @@ const annotationComment = {
   updatedAt: new Date("2026-05-14T12:01:00.000Z"),
 };
 
-function registerModuleMocks() {
-  vi.mock("../services/safety-gate.js", () => ({
+vi.mock("../services/safety-gate.js", () => ({
   evaluateAndGate: vi.fn(async () => ({ gated: false })),
 }));
 
-vi.doMock("../services/index.js", () => ({
+function registerModuleMocks() {
+  vi.doMock("../services/index.js", () => ({
     accessService: () => ({ canUser: vi.fn(), hasPermission: vi.fn(async () => false) }),
     agentService: () => ({ getById: vi.fn(), list: vi.fn(async () => []) }),
     companyService: () => ({ getById: vi.fn(async () => ({ id: companyId, attachmentMaxBytes: 10_000_000 })) }),
