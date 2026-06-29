@@ -89,7 +89,11 @@ function registerRouteMocks() {
     routineService: () => mockRoutineService,
   }));
 
-  vi.doMock("../services/index.js", () => ({
+  vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
+vi.doMock("../services/index.js", () => ({
     companyService: () => ({
       getById: vi.fn(async () => ({ id: "company-1", attachmentMaxBytes: 10 * 1024 * 1024 })),
     }),
@@ -103,6 +107,7 @@ function registerRouteMocks() {
     heartbeatService: () => mockHeartbeatService,
     instanceSettingsService: () => mockInstanceSettingsService,
     issueApprovalService: () => ({}),
+  approvalService: () => ({}),
     issueReferenceService: () => ({
       deleteDocumentSource: async () => undefined,
       diffIssueReferenceSummary: () => ({

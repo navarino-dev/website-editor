@@ -22,6 +22,10 @@ const mockHeartbeatService = vi.hoisted(() => ({
   wakeup: vi.fn(),
 }));
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 vi.mock("../services/index.js", () => ({
   heartbeatService: () => mockHeartbeatService,
   issueService: () => mockIssueService,

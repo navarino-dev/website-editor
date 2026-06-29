@@ -16,6 +16,10 @@ const mockIssueService = vi.hoisted(() => ({
   findMentionedAgents: vi.fn(async () => []),
 }));
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 vi.mock("../services/index.js", () => ({
   companyService: () => ({
     getById: vi.fn(async () => ({ id: "company-1", attachmentMaxBytes: 10 * 1024 * 1024 })),
@@ -48,6 +52,7 @@ vi.mock("../services/index.js", () => ({
     get: vi.fn(),
     listCompanyIds: vi.fn(),
   }),
+  approvalService: () => ({}),
   issueApprovalService: () => ({}),
   issueReferenceService: () => ({
     deleteDocumentSource: async () => undefined,

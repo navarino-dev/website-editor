@@ -34,7 +34,11 @@ function registerRouteMocks() {
     logActivity: mockLogActivity,
   }));
 
-  vi.doMock("../services/index.js", () => ({
+  vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
+vi.doMock("../services/index.js", () => ({
     accessService: () => ({
       canUser: vi.fn(),
       hasPermission: vi.fn(),
@@ -69,6 +73,7 @@ function registerRouteMocks() {
       listCompanyIds: vi.fn(async () => ["company-1"]),
     }),
     issueApprovalService: () => ({}),
+  approvalService: () => ({}),
     issueReferenceService: () => ({
       deleteDocumentSource: async () => undefined,
       diffIssueReferenceSummary: () => ({

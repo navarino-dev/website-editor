@@ -60,6 +60,7 @@ import * as serviceIndex from "../services/index.js";
 import {
   accessService,
   agentService,
+  approvalService,
   companyService,
   companySearchService,
   executionWorkspaceService,
@@ -80,6 +81,7 @@ import {
   routineService,
   workProductService,
 } from "../services/index.js";
+import { evaluateAndGate } from "../services/safety-gate.js";
 import { logger } from "../middleware/logger.js";
 import { conflict, forbidden, HttpError, notFound, unauthorized, unprocessable } from "../errors.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
@@ -868,6 +870,7 @@ export function issueRoutes(
   const projectsSvc = projectService(db);
   const goalsSvc = goalService(db);
   const issueApprovalsSvc = issueApprovalService(db);
+  const approvalsSvc = approvalService(db);
   const recoveryActionsSvc = issueRecoveryActionService(db);
   const executionWorkspacesSvc = executionWorkspaceServiceDirect(db);
   const workProductsSvc = workProductService(db);
@@ -3583,15 +3586,35 @@ export function issueRoutes(
       });
     }
 
-    void queueIssueAssignmentWakeup({
-      heartbeat,
-      issue,
-      reason: "issue_assigned",
-      mutation: "create",
-      contextSource: "issue.create",
-      requestedByActorType: actor.actorType,
-      requestedByActorId: actor.actorId,
-    });
+    let safetyGated = false;
+    if (actor.actorType === "user") {
+      try {
+        const gateResult = await evaluateAndGate(
+          {
+            companyId,
+            issue: { id: issue.id, status: issue.status, assigneeAgentId: issue.assigneeAgentId, title: issue.title },
+            requestText: [issue.title, req.body.description].filter(Boolean).join("\n"),
+            requesterUserId: actor.actorType === "user" ? actor.actorId : null,
+          },
+          { issuesSvc: svc, approvalsSvc, issueApprovalsSvc },
+        );
+        safetyGated = gateResult.gated;
+      } catch (err) {
+        logger.warn({ err, issueId: issue.id }, "safety gate failed on issue create; proceeding un-gated");
+      }
+    }
+
+    if (!safetyGated) {
+      void queueIssueAssignmentWakeup({
+        heartbeat,
+        issue,
+        reason: "issue_assigned",
+        mutation: "create",
+        contextSource: "issue.create",
+        requestedByActorType: actor.actorType,
+        requestedByActorId: actor.actorId,
+      });
+    }
 
     res.status(201).json({
       ...issue,

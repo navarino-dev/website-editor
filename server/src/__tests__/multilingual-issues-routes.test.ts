@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
 import { companies, createDb } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,

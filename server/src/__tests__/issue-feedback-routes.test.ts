@@ -81,7 +81,11 @@ function registerModuleMocks() {
     getTelemetryClient: vi.fn(() => ({ track: vi.fn() })),
   }));
 
-  vi.doMock("../services/index.js", () => ({
+  vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
+vi.doMock("../services/index.js", () => ({
     companyService: () => ({
       getById: vi.fn(async () => ({ id: "company-1", attachmentMaxBytes: 10 * 1024 * 1024 })),
     }),
@@ -93,6 +97,7 @@ function registerModuleMocks() {
     goalService: () => ({}),
     heartbeatService: () => mockHeartbeatService,
     issueApprovalService: () => ({}),
+  approvalService: () => ({}),
     issueReferenceService: () => mockIssueReferenceService,
     issueRecoveryActionService: () => ({
       getActiveForIssue: vi.fn(async () => null),

@@ -19,6 +19,10 @@ const mockIssueService = vi.hoisted(() => ({
   findMentionedAgents: vi.fn(async () => []),
 }));
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 vi.mock("../services/index.js", () => ({
   accessService: () => ({
     canUser: vi.fn(async () => true),
@@ -65,6 +69,7 @@ vi.mock("../services/index.js", () => ({
     })),
     listCompanyIds: vi.fn(async () => ["company-1"]),
   }),
+  approvalService: () => ({}),
   issueApprovalService: () => ({}),
   issueRecoveryActionService: () => ({
     getActiveForIssue: vi.fn(async () => null),

@@ -52,6 +52,10 @@ const mockSecretService = vi.hoisted(() => ({
 
 const mockLogActivity = vi.hoisted(() => vi.fn());
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 vi.mock("../services/index.js", () => ({
   projectService: () => mockProjectService,
   issueService: () => mockIssueService,
@@ -76,6 +80,7 @@ vi.mock("../services/index.js", () => ({
     getRun: vi.fn(),
     getActiveRunForAgent: vi.fn(),
   }),
+  approvalService: () => ({}),
   issueApprovalService: () => ({
     listApprovalsForIssue: vi.fn(),
     unlink: vi.fn(),

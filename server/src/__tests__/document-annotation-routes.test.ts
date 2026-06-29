@@ -107,7 +107,11 @@ const annotationComment = {
 };
 
 function registerModuleMocks() {
-  vi.doMock("../services/index.js", () => ({
+  vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
+vi.doMock("../services/index.js", () => ({
     accessService: () => ({ canUser: vi.fn(), hasPermission: vi.fn(async () => false) }),
     agentService: () => ({ getById: vi.fn(), list: vi.fn(async () => []) }),
     companyService: () => ({ getById: vi.fn(async () => ({ id: companyId, attachmentMaxBytes: 10_000_000 })) }),
@@ -125,6 +129,7 @@ function registerModuleMocks() {
       listCompanyIds: vi.fn(async () => [companyId]),
     }),
     issueApprovalService: () => ({}),
+  approvalService: () => ({}),
     issueRecoveryActionService: () => ({
       getActiveForIssue: vi.fn(async () => null),
       listActiveForIssues: vi.fn(async () => new Map()),

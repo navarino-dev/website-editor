@@ -3,6 +3,10 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../services/safety-gate.js", () => ({
+  evaluateAndGate: vi.fn(async () => ({ gated: false })),
+}));
+
 const issueId = "11111111-1111-4111-8111-111111111111";
 const companyId = "22222222-2222-4222-8222-222222222222";
 const ownerAgentId = "33333333-3333-4333-8333-333333333333";
@@ -136,6 +140,7 @@ function registerRouteMocks() {
       })),
       listCompanyIds: vi.fn(async () => [companyId]),
     }),
+    approvalService: () => ({}),
     issueApprovalService: () => ({}),
     issueRecoveryActionService: () => mockIssueRecoveryActionService,
     issueReferenceService: () => ({
