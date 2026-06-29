@@ -37,6 +37,40 @@ describe("getLatestProductionDeployStatus", () => {
     expect(result).toBe("success");
   });
 
+  it("detects production environment case-insensitively (lowercase 'production')", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch" as never);
+    // list includes both a non-production environment and a lowercase "production"
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([
+      { id: 20, created_at: "2026-06-29T12:05:00Z", environment: "Preview" },
+      { id: 21, created_at: "2026-06-29T12:10:00Z", environment: "production" },
+    ]), { status: 200 }) as never);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([
+      { state: "success" },
+    ]), { status: 200 }) as never);
+
+    const result = await getLatestProductionDeployStatus({
+      repoUrl: "https://github.com/navarino-dev/seaside-website",
+      token: "t",
+      sinceIso: "2026-06-29T11:00:00Z",
+    });
+    expect(result).toBe("success");
+  });
+
+  it("ignores non-production environments (e.g. Preview)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch" as never);
+    // Only a Preview deployment is present — no production
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([
+      { id: 30, created_at: "2026-06-29T12:00:00Z", environment: "Preview" },
+    ]), { status: 200 }) as never);
+
+    const result = await getLatestProductionDeployStatus({
+      repoUrl: "https://github.com/x/y",
+      token: "t",
+      sinceIso: "2026-06-29T11:00:00Z",
+    });
+    expect(result).toBe("none");
+  });
+
   it("returns none when there is no production deployment since the floor", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch" as never);
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }) as never);

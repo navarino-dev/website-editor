@@ -64,39 +64,43 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
     companyId: string;
     projectId: string | null;
   }): Promise<void> {
-    if (!issue.projectId) return;
-    const project = await deps.projectsSvc.getById(issue.projectId);
-    const productionUrl = project?.productionUrl?.trim() ?? null;
-    const repoUrl = project?.codebase.repoUrl ?? null;
-    if (!productionUrl || !repoUrl) return;
+    try {
+      if (!issue.projectId) return;
+      const project = await deps.projectsSvc.getById(issue.projectId);
+      const productionUrl = project?.productionUrl?.trim() ?? null;
+      const repoUrl = project?.codebase.repoUrl ?? null;
+      if (!productionUrl || !repoUrl) return;
 
-    const now = new Date();
-    const db = deps.db as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const now = new Date();
+      const db = deps.db as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-    // one active watch per issue
-    const existing = await db
-      .select({ id: deploymentWatches.id })
-      .from(deploymentWatches)
-      .where(
-        and(
-          eq(deploymentWatches.issueId, issue.id),
-          eq(deploymentWatches.status, "watching"),
-        ),
-      );
-    if (existing.length > 0) return;
+      // one active watch per issue
+      const existing = await db
+        .select({ id: deploymentWatches.id })
+        .from(deploymentWatches)
+        .where(
+          and(
+            eq(deploymentWatches.issueId, issue.id),
+            eq(deploymentWatches.status, "watching"),
+          ),
+        );
+      if (existing.length > 0) return;
 
-    await db.insert(deploymentWatches).values({
-      companyId: issue.companyId,
-      issueId: issue.id,
-      repoUrl,
-      productionUrl,
-      status: "watching",
-      startedAt: now,
-      deadlineAt: new Date(now.getTime() + DEADLINE_MS),
-      nextCheckAt: now,
-    });
+      await db.insert(deploymentWatches).values({
+        companyId: issue.companyId,
+        issueId: issue.id,
+        repoUrl,
+        productionUrl,
+        status: "watching",
+        startedAt: now,
+        deadlineAt: new Date(now.getTime() + DEADLINE_MS),
+        nextCheckAt: now,
+      });
 
-    await post(issue.id, PUBLISHING_BODY, "info");
+      await post(issue.id, PUBLISHING_BODY, "info");
+    } catch (err) {
+      console.error("[deployment-watch] onIssueDone error (non-fatal):", err);
+    }
   }
 
   async function tick(

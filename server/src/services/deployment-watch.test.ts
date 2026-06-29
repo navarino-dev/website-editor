@@ -192,6 +192,48 @@ describe("createDeploymentWatch", () => {
       expect(insertedRows).toHaveLength(0);
       expect(addComment).not.toHaveBeenCalled();
     });
+
+    it("resolves (does not throw) when projectsSvc.getById rejects", async () => {
+      const { db } = createFakeDb([]);
+      const deps = {
+        db: db as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        issuesSvc: { addComment: vi.fn().mockResolvedValue(undefined) },
+        projectsSvc: {
+          getById: vi.fn().mockRejectedValue(new Error("DB connection lost")),
+        },
+        logActivity: vi.fn().mockResolvedValue(undefined),
+        getToken: vi.fn().mockReturnValue("gh-token"),
+      };
+      const svc = createDeploymentWatch(deps);
+
+      await expect(
+        svc.onIssueDone({ id: "issue-1", companyId: "company-1", projectId: "project-1" }),
+      ).resolves.toBeUndefined();
+    });
+
+    it("resolves (does not throw) when issuesSvc.addComment rejects", async () => {
+      // select returns [] (no existing watch), insert resolves, but addComment rejects
+      const { db } = createFakeDb([[]]);
+      const deps = {
+        db: db as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        issuesSvc: {
+          addComment: vi.fn().mockRejectedValue(new Error("comment service unavailable")),
+        },
+        projectsSvc: {
+          getById: vi.fn().mockResolvedValue({
+            productionUrl: "https://example.com",
+            codebase: { repoUrl: "https://github.com/org/repo" },
+          }),
+        },
+        logActivity: vi.fn().mockResolvedValue(undefined),
+        getToken: vi.fn().mockReturnValue("gh-token"),
+      };
+      const svc = createDeploymentWatch(deps);
+
+      await expect(
+        svc.onIssueDone({ id: "issue-1", companyId: "company-1", projectId: "project-1" }),
+      ).resolves.toBeUndefined();
+    });
   });
 
   // -------------------------------------------------------------------------

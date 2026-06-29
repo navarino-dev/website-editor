@@ -31,14 +31,14 @@ export async function getLatestProductionDeployStatus(args: {
     Accept: "application/vnd.github+json",
   };
   const listRes = await ghFetch(
-    `${base}/repos/${parsed.owner}/${parsed.repo}/deployments?environment=Production&per_page=5`,
+    `${base}/repos/${parsed.owner}/${parsed.repo}/deployments?per_page=30`,
     { headers },
   );
   if (!listRes.ok) return "pending";
-  const deployments = (await listRes.json()) as Array<{ id: number; created_at: string }>;
+  const deployments = (await listRes.json()) as Array<{ id: number; created_at: string; environment: string }>;
   const since = new Date(args.sinceIso).getTime();
   const recent = deployments
-    .filter((d) => new Date(d.created_at).getTime() >= since - 60_000)
+    .filter((d) => d.environment?.toLowerCase() === "production" && new Date(d.created_at).getTime() >= since - 60_000)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
   if (!recent) return "none";
 

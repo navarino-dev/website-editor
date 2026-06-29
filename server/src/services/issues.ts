@@ -4610,7 +4610,7 @@ export function issueService(db: Db) {
           id: result.id,
           companyId: result.companyId,
           projectId: result.projectId ?? null,
-        });
+        })?.catch(() => {});
       }
       return result;
     },
