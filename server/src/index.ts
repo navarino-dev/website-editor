@@ -726,8 +726,7 @@ export async function startServer(): Promise<StartedServer> {
     const routines = routineService(db as any, { pluginWorkerManager });
     const deploymentWatch = createDeploymentWatch({
       db: db as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      issuesSvc: issueService(db as any) as any,
+      issuesSvc: issueService(db as any),
       projectsSvc: projectService(db as any),
       logActivity: (input) => logActivity(db as any, input),
       getToken: () => process.env.GITHUB_TOKEN,

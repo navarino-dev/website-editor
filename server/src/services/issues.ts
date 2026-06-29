@@ -4605,7 +4605,7 @@ export function issueService(db: Db) {
       };
 
       const result = await (dbOrTx === db ? db.transaction(runUpdate) : runUpdate(dbOrTx));
-      if (result && issueData.status === "done") {
+      if (result && issueData.status === "done" && existing.status !== "done") {
         void _deploymentWatch?.onIssueDone({
           id: result.id,
           companyId: result.companyId,

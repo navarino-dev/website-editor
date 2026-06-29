@@ -2376,7 +2376,7 @@ function SystemNoticeCommentRow({
         href={liveUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-3 flex items-center gap-3 rounded-lg border border-orange-300/60 bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 shadow-[0_0_12px_2px_rgba(251,146,60,0.25)] ring-1 ring-orange-200/80 transition-shadow hover:shadow-[0_0_18px_4px_rgba(251,146,60,0.35)] dark:border-orange-500/40 dark:from-orange-950/40 dark:to-amber-950/40 dark:ring-orange-600/40"
+        className="group mt-3 flex items-center gap-3 rounded-lg border border-orange-300/60 bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 shadow-[0_0_12px_2px_rgba(251,146,60,0.25)] ring-1 ring-orange-200/80 transition-shadow hover:shadow-[0_0_18px_4px_rgba(251,146,60,0.35)] dark:border-orange-500/40 dark:from-orange-950/40 dark:to-amber-950/40 dark:ring-orange-600/40"
       >
         <Sparkles className="h-4 w-4 shrink-0 text-orange-500" />
         <span className="flex-1 min-w-0">
@@ -2417,7 +2417,7 @@ function SystemNoticeCommentRow({
   });
 
   const handleCopy = () => {
-    void navigator.clipboard.writeText(bodyText).then(() => {
+    void navigator.clipboard.writeText(displayBody).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });

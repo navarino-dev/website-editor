@@ -1,7 +1,7 @@
 // server/src/services/deployment-watch.ts
 import { and, eq, lte } from "drizzle-orm";
 import { deploymentWatches } from "@paperclipai/db";
-import type { IssueCommentPresentation } from "@paperclipai/shared";
+import type { IssueCommentAuthorType, IssueCommentPresentation } from "@paperclipai/shared";
 import type { LogActivityInput } from "./activity-log.js";
 import { getLatestProductionDeployStatus } from "./github-deployments.js";
 
@@ -33,7 +33,7 @@ export interface DeploymentWatchDeps {
       issueId: string,
       body: string,
       actor: Actor,
-      options?: { authorType?: string | null; presentation?: IssueCommentPresentation | null },
+      options?: { authorType?: IssueCommentAuthorType | null; presentation?: IssueCommentPresentation | null },
     ) => Promise<unknown>;
   };
   projectsSvc: {
