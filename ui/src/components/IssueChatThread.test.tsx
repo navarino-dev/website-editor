@@ -6,9 +6,11 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Agent } from "@paperclipai/shared";
+import type { ThreadMessage } from "@assistant-ui/react";
 import {
   IssueChatThread,
   VIRTUALIZED_THREAD_ROW_THRESHOLD,
+  allTextPartsHiddenInSimplifiedView,
   canStopIssueChatRun,
   findLatestCommentMessageIndex,
   resolveAssistantMessageFoldedState,
@@ -2787,5 +2789,20 @@ describe("IssueChatThread", () => {
     const { container: c } = await renderThreadWithComment(body);
     expect(c.textContent).toContain("in_review");
     expect(c.textContent).toContain("github.com");
+  });
+
+  it("does not hide messages with only non-text parts (image/tool-result) in simplified view", () => {
+    // A message with no text parts but containing an image should not be hidden.
+    // The function only checks message.content, so we test with minimal required fields.
+    const messageWithImageOnly = {
+      content: [
+        {
+          type: "image",
+          image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        },
+      ],
+    } as unknown as ThreadMessage;
+
+    expect(allTextPartsHiddenInSimplifiedView(messageWithImageOnly)).toBe(false);
   });
 });

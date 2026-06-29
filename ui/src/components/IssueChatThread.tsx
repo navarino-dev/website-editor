@@ -1481,11 +1481,13 @@ function IssueChatUserMessage({
 // dejargon in the simplified view AND there is no preview card to show.
 // Non-text parts (CoT, tool-calls) are not text parts so they are handled by
 // the hasCoT guard in the caller.
-function allTextPartsHiddenInSimplifiedView(message: ThreadMessage): boolean {
+export function allTextPartsHiddenInSimplifiedView(message: ThreadMessage): boolean {
   const textParts = message.content.filter(
     (p): p is TextMessagePart => p.type === "text",
   );
-  if (textParts.length === 0) return true;
+  // If there are no text parts, the message has non-text content (image/tool-result)
+  // that must remain visible in the simplified view.
+  if (textParts.length === 0) return false;
   return textParts.every((p) => {
     // Handoff callout is always visible.
     if (isSuccessfulRunHandoffComment(p.text)) return false;
