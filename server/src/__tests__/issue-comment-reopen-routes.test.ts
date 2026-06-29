@@ -1569,4 +1569,20 @@ describe.sequential("issue comment reopen routes", () => {
       }),
     ));
   });
+
+  // Fix 1 regression: board users must not bypass the safety gate via authorType: "system".
+  it("gates board user comment even when authorType:'system' is submitted (Fix 1 bypass closed)", async () => {
+    mockIssueService.getById.mockResolvedValue(makeIssue("todo"));
+
+    const { evaluateAndGate } = await import("../services/safety-gate.js");
+    const mockGate = vi.mocked(evaluateAndGate);
+
+    const res = await request(await installActor(createApp()))
+      .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
+      .send({ body: "please rewrite the entire homepage", authorType: "system" });
+
+    expect(res.status).toBe(201);
+    // The gate must have been called — proving authorType:'system' no longer bypasses it.
+    expect(mockGate).toHaveBeenCalledTimes(1);
+  });
 });

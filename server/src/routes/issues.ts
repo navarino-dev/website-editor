@@ -3599,8 +3599,24 @@ export function issueRoutes(
           { issuesSvc: svc, approvalsSvc, issueApprovalsSvc },
         );
         safetyGated = gateResult.gated;
+        if (gateResult.gated) {
+          await logActivity(db, {
+            companyId,
+            actorType: actor.actorType,
+            actorId: actor.actorId,
+            action: "issue.safety_gated",
+            entityType: "issue",
+            entityId: issue.id,
+            details: {
+              score: gateResult.score.score,
+              degraded: gateResult.score.degraded ?? false,
+              approvalId: gateResult.approvalId ?? null,
+            },
+          });
+        }
       } catch (err) {
-        logger.warn({ err, issueId: issue.id }, "safety gate failed on issue create; proceeding un-gated");
+        logger.warn({ err, issueId: issue.id }, "safety gate errored; holding the change (fail-closed)");
+        safetyGated = true;
       }
     }
 
@@ -5701,8 +5717,7 @@ export function issueRoutes(
     });
 
     let safetyGated = false;
-    const commentAuthorType = req.body.authorType ?? (actor.actorType === "agent" ? "agent" : "user");
-    if (actor.actorType === "user" && commentAuthorType === "user") {
+    if (actor.actorType === "user") {
       try {
         const gateResult = await evaluateAndGate(
           {
@@ -5719,8 +5734,24 @@ export function issueRoutes(
           { issuesSvc: svc, approvalsSvc, issueApprovalsSvc },
         );
         safetyGated = gateResult.gated;
+        if (gateResult.gated) {
+          await logActivity(db, {
+            companyId: currentIssue.companyId,
+            actorType: actor.actorType,
+            actorId: actor.actorId,
+            action: "issue.safety_gated",
+            entityType: "issue",
+            entityId: currentIssue.id,
+            details: {
+              score: gateResult.score.score,
+              degraded: gateResult.score.degraded ?? false,
+              approvalId: gateResult.approvalId ?? null,
+            },
+          });
+        }
       } catch (err) {
-        logger.warn({ err, issueId: currentIssue.id }, "safety gate failed on issue reply; proceeding un-gated");
+        logger.warn({ err, issueId: currentIssue.id }, "safety gate errored; holding the change (fail-closed)");
+        safetyGated = true;
       }
     }
 

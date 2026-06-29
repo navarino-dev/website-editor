@@ -38,7 +38,7 @@ function cardBody(score: SafetyScore, gated: boolean): string {
 export async function evaluateAndGate(
   input: GateInput,
   deps: SafetyGateDeps,
-): Promise<{ gated: boolean; score: SafetyScore }> {
+): Promise<{ gated: boolean; score: SafetyScore; approvalId?: string }> {
   const scorer = deps.scorer ?? scoreChangeRequest;
   const score = await scorer({ title: input.issue.title, text: input.requestText, projectName: input.projectName });
 
@@ -64,8 +64,8 @@ export async function evaluateAndGate(
 
   if (!gated) return { gated: false, score };
 
-  await deps.issuesSvc.update(input.issue.id, { status: "blocked" });
-
+  // Create + link the approval BEFORE blocking the issue, so a failure here can
+  // never leave the issue blocked with no approval to release it.
   const approval = await deps.approvalsSvc.create(input.companyId, {
     type: "safety_review_required",
     requestedByAgentId: input.issue.assigneeAgentId ?? null,
@@ -85,5 +85,7 @@ export async function evaluateAndGate(
     userId: input.requesterUserId,
   });
 
-  return { gated: true, score };
+  await deps.issuesSvc.update(input.issue.id, { status: "blocked" });
+
+  return { gated: true, score, approvalId: approval.id };
 }

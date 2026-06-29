@@ -46,6 +46,8 @@ describe("evaluateAndGate", () => {
     expect(data.payload).toMatchObject({ score: 8, priorStatus: "todo", issueId: "i1" });
     expect(vi.mocked(deps.issueApprovalsSvc.linkManyForApproval)).toHaveBeenCalledWith("appr1", ["i1"], { userId: "u1" });
     expect(vi.mocked(deps.issuesSvc.addComment)).toHaveBeenCalledTimes(1);
+    // Approval is created+linked BEFORE the issue is blocked (Fix 2b); approvalId surfaced in result.
+    expect(out.approvalId).toBe("appr1");
   });
 
   it("gates on degraded (fail-closed) scores", async () => {
