@@ -81,7 +81,7 @@ const defaultAnthropicCall: RawScorerCall = async (input) => {
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userText }],
-      output_config: { format: { type: "json_schema", name: "safety_score", schema: SAFETY_SCORE_SCHEMA } },
+      output_config: { format: { type: "json_schema", schema: SAFETY_SCORE_SCHEMA } },
     } as Anthropic.MessageCreateParams & { output_config: unknown },
     { timeout: 10_000 },
   )) as Anthropic.Message;
