@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./Sidebar";
+import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
 
 const mockHeartbeatsApi = vi.hoisted(() => ({
   liveRunsForCompany: vi.fn(),
@@ -43,7 +44,7 @@ vi.mock("../context/DialogContext", () => ({
 // The simplified-view gate fails safe to the simplified view when board access
 // is unresolved; these tests cover the full-board chrome, so pin it off.
 vi.mock("../hooks/useIsSimplifiedView", () => ({
-  useIsSimplifiedView: () => false,
+  useIsSimplifiedView: vi.fn(() => false),
 }));
 
 // Sidebar runs the simplified theme enforcer, which reaches into ThemeProvider;
@@ -137,6 +138,7 @@ describe("Sidebar", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     mockHeartbeatsApi.liveRunsForCompany.mockResolvedValue([]);
+    vi.mocked(useIsSimplifiedView).mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -153,6 +155,20 @@ describe("Sidebar", () => {
     expect(topSearchLink?.getAttribute("href")).toBe("/search");
     const workLinks = [...container.querySelectorAll("nav a")].map((anchor) => anchor.textContent?.trim());
     expect(workLinks).not.toContain("Search");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("hides the Inbox nav in simplified (property-manager) view", async () => {
+    vi.mocked(useIsSimplifiedView).mockReturnValue(true);
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: false });
+    const root = await renderSidebar();
+
+    const primaryNavText = container.querySelector("nav > div:first-child")?.textContent ?? "";
+    expect(primaryNavText).toContain("My Requests");
+    expect(primaryNavText).not.toContain("Inbox");
 
     await act(async () => {
       root.unmount();

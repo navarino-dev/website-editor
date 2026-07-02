@@ -107,14 +107,16 @@ export function Sidebar() {
             </button>
           )}
           <SidebarNavItem to="/dashboard" label={isSimplified ? "My Requests" : "Dashboard"} icon={LayoutDashboard} liveCount={isSimplified ? undefined : liveRunCount} />
-          <SidebarNavItem
-            to="/inbox"
-            label="Inbox"
-            icon={Inbox}
-            badge={inboxBadge.inbox}
-            badgeTone={inboxBadge.failedRuns > 0 ? "danger" : "default"}
-            alert={inboxBadge.failedRuns > 0}
-          />
+          {!isSimplified && (
+            <SidebarNavItem
+              to="/inbox"
+              label="Inbox"
+              icon={Inbox}
+              badge={inboxBadge.inbox}
+              badgeTone={inboxBadge.failedRuns > 0 ? "danger" : "default"}
+              alert={inboxBadge.failedRuns > 0}
+            />
+          )}
         </div>
 
         {!isSimplified && (
