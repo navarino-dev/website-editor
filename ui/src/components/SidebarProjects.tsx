@@ -54,6 +54,8 @@ const REORDER_POINTER_MEDIA = "(hover: hover) and (pointer: fine)";
 
 type ProjectItemProps = {
   activeProjectRef: string | null;
+  isSimplified: boolean;
+  activeSimplifiedProjectId: string | null;
   companyId: string | null;
   companyPrefix: string | null;
   isMobile: boolean;
@@ -108,6 +110,8 @@ function useFineReorderPointer() {
 
 function ProjectItem({
   activeProjectRef,
+  isSimplified,
+  activeSimplifiedProjectId,
   companyId,
   companyPrefix,
   isMobile,
@@ -119,12 +123,20 @@ function ProjectItem({
   isDragging = false,
 }: ProjectItemProps) {
   const routeRef = projectRouteRef(project);
+  // Property managers browse a property's requests on the simplified dashboard,
+  // driven by the ?project= param; full-board users go to the project issue board.
+  const to = isSimplified
+    ? { pathname: "/dashboard", search: `?project=${project.id}` }
+    : `/projects/${routeRef}/issues`;
+  const isActive = isSimplified
+    ? activeSimplifiedProjectId === project.id
+    : activeProjectRef === routeRef || activeProjectRef === project.id;
 
   return (
     <div className="flex flex-col gap-0.5">
       <div className="group/project relative flex items-center">
         <NavLink
-          to={`/projects/${routeRef}/issues`}
+          to={to}
           state={SIDEBAR_SCROLL_RESET_STATE}
           onClick={(e) => {
             if (isDragging) {
@@ -135,7 +147,7 @@ function ProjectItem({
           }}
           className={cn(
             "flex min-w-0 flex-1 items-center gap-2.5 px-3 py-1.5 pr-8 pointer-coarse:py-1 text-[13px] font-medium transition-colors",
-            activeProjectRef === routeRef || activeProjectRef === project.id
+            isActive
               ? "bg-accent text-foreground"
               : "text-foreground/80 hover:bg-accent/50 hover:text-foreground",
           )}
@@ -287,6 +299,11 @@ export function SidebarProjects() {
 
   const projectMatch = location.pathname.match(/^\/(?:[^/]+\/)?projects\/([^/]+)/);
   const activeProjectRef = projectMatch?.[1] ?? null;
+  // Simplified (property-manager) view selects a property via the dashboard ?project= param.
+  const isDashboardPath = /(?:^|\/)dashboard$/.test(location.pathname);
+  const activeSimplifiedProjectId = isDashboardPath
+    ? new URLSearchParams(location.search).get("project")
+    : null;
   const sensors = useSensors(
     // Project reordering is intentionally desktop-only; touch should remain tap/scroll behavior.
     useSensor(MouseSensor, {
@@ -372,6 +389,8 @@ export function SidebarProjects() {
     <ProjectItem
       key={project.id}
       activeProjectRef={activeProjectRef}
+      isSimplified={isSimplified}
+      activeSimplifiedProjectId={activeSimplifiedProjectId}
       companyId={selectedCompanyId}
       companyPrefix={selectedCompany?.issuePrefix ?? null}
       isMobile={isMobile}
@@ -419,6 +438,8 @@ export function SidebarProjects() {
                 <SortableProjectItem
                   key={project.id}
                   activeProjectRef={activeProjectRef}
+                  isSimplified={isSimplified}
+                  activeSimplifiedProjectId={activeSimplifiedProjectId}
                   companyId={selectedCompanyId}
                   companyPrefix={selectedCompany?.issuePrefix ?? null}
                   isMobile={isMobile}

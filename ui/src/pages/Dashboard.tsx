@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "@/lib/router";
+import { Link, useLocation, useNavigate } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "../api/dashboard";
 import { activityApi } from "../api/activity";
@@ -19,7 +19,7 @@ import { StatusIcon } from "../components/StatusIcon";
 import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
-import { cn, formatCents } from "../lib/utils";
+import { formatCents } from "../lib/utils";
 import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, Plus, ChevronRight, Sparkles } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
@@ -74,12 +74,24 @@ function SimplifiedDashboard({
   issues: Issue[] | undefined;
   projects: Array<{ id: string; name: string; color?: string | null }> | undefined;
 }) {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const { openNewIssue } = useDialogActions();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const activeProjects = projects?.filter((p) => p.name !== "Onboarding") ?? [];
-  const effectiveProjectId = selectedProjectId ?? activeProjects[0]?.id ?? null;
+  const projectParam = new URLSearchParams(location.search).get("project");
+  const firstProjectId = activeProjects[0]?.id ?? null;
+  // Property selection is driven by the sidebar via the ?project= URL param.
+  const effectiveProjectId =
+    (projectParam && activeProjects.some((p) => p.id === projectParam) ? projectParam : null) ?? firstProjectId;
   const currentProject = activeProjects.find((p) => p.id === effectiveProjectId);
+
+  // Keep the URL in sync with the shown property so the sidebar highlights it.
+  useEffect(() => {
+    if (!projectParam && firstProjectId) {
+      navigate({ pathname: "/dashboard", search: `?project=${firstProjectId}` }, { replace: true });
+    }
+  }, [projectParam, firstProjectId, navigate]);
 
   const filteredIssues = useMemo(() => {
     if (!issues || !effectiveProjectId) return [];
@@ -108,25 +120,6 @@ function SimplifiedDashboard({
           </button>
         </div>
       </header>
-
-      {activeProjects.length > 1 && (
-        <div className="mb-7 inline-flex max-w-full gap-1 overflow-x-auto rounded-full bg-secondary p-1 scrollbar-auto-hide">
-          {activeProjects.map((project) => (
-            <button
-              key={project.id}
-              onClick={() => setSelectedProjectId(project.id)}
-              className={cn(
-                "shrink-0 rounded-full px-4 py-1.5 text-[13px] font-medium transition-all duration-200",
-                project.id === effectiveProjectId
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {project.name}
-            </button>
-          ))}
-        </div>
-      )}
 
       {needsAttention.length > 0 && (
         <section className="mb-7">
