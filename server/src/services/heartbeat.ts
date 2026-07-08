@@ -49,6 +49,7 @@ import {
   workspaceOperations,
 } from "@paperclipai/db";
 import { conflict, HttpError, notFound } from "../errors.js";
+import { hasPendingSafetyApproval } from "./safety-hold.js";
 import { logger } from "../middleware/logger.js";
 import { publishLiveEvent } from "./live-events.js";
 import { getRunLogStore, type RunLogHandle } from "./run-log-store.js";
@@ -6014,6 +6015,29 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             issueId,
             holdId: activePauseHold.holdId,
             rootIssueId: activePauseHold.rootIssueId,
+            source: "heartbeat.claim_queued_run",
+            securityPrinciples: ["Complete Mediation", "Fail Securely", "Secure Defaults"],
+          },
+        });
+        return null;
+      }
+
+      // Defense-in-depth: do not start a run while a safety review approval is
+      // pending on this issue, even if it somehow reached the queue.
+      const pendingSafetyApproval = await hasPendingSafetyApproval(db, run.companyId, issueId);
+      if (pendingSafetyApproval) {
+        await cancelRunInternal(run.id, "Cancelled because issue has a pending safety review approval");
+        await logActivity(db, {
+          companyId: run.companyId,
+          actorType: "system",
+          actorId: "system",
+          agentId: run.agentId,
+          runId: run.id,
+          action: "issue.safety_review_hold_run_interrupted",
+          entityType: "heartbeat_run",
+          entityId: run.id,
+          details: {
+            issueId,
             source: "heartbeat.claim_queued_run",
             securityPrinciples: ["Complete Mediation", "Fail Securely", "Secure Defaults"],
           },
