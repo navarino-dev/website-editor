@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "@/lib/router";
+import { Link, useLocation } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "../api/dashboard";
 import { activityApi } from "../api/activity";
@@ -20,7 +20,7 @@ import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
 import { formatCents } from "../lib/utils";
-import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, ArrowUp, ChevronRight, Sparkles } from "lucide-react";
+import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, ChevronRight, Sparkles } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
@@ -28,6 +28,7 @@ import type { Agent, Issue } from "@paperclipai/shared";
 import { PluginSlotOutlet } from "@/plugins/slots";
 import { useIsSimplifiedView } from "../hooks/useIsSimplifiedView";
 import { friendlyStatusMeta } from "../lib/friendlyLabels";
+import { PropertyChatComposer } from "../components/PropertyChatComposer";
 
 const DASHBOARD_ACTIVITY_LIMIT = 10;
 
@@ -48,7 +49,15 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function RequestCard({ issue, index = 0 }: { issue: Issue; index?: number }) {
+function RequestCard({
+  issue,
+  projectName,
+  index = 0,
+}: {
+  issue: Issue;
+  projectName?: string | null;
+  index?: number;
+}) {
   return (
     <Link
       to={`/issues/${issue.identifier ?? issue.id}`}
@@ -59,7 +68,15 @@ function RequestCard({ issue, index = 0 }: { issue: Issue; index?: number }) {
         <p className="truncate text-[15px] font-medium leading-snug text-foreground">
           {issue.title}
         </p>
-        <p className="mt-1 text-[13px] text-muted-foreground">{timeAgo(issue.updatedAt)}</p>
+        <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          {projectName ? (
+            <>
+              <span className="pm-accent font-medium">{projectName}</span>
+              <span className="opacity-40">·</span>
+            </>
+          ) : null}
+          {timeAgo(issue.updatedAt)}
+        </p>
       </div>
       <StatusPill status={issue.status} />
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
@@ -68,68 +85,68 @@ function RequestCard({ issue, index = 0 }: { issue: Issue; index?: number }) {
 }
 
 function SimplifiedDashboard({
+  companyId,
   issues,
   projects,
 }: {
+  companyId: string | null;
   issues: Issue[] | undefined;
-  projects: Array<{ id: string; name: string; color?: string | null }> | undefined;
+  projects: Array<{ id: string; name: string; color?: string | null; leadAgentId?: string | null }> | undefined;
 }) {
-  const { openNewIssue } = useDialogActions();
   const location = useLocation();
-  const navigate = useNavigate();
 
-  const activeProjects = projects?.filter((p) => p.name !== "Onboarding") ?? [];
+  const activeProjects = useMemo(
+    () => (projects ?? []).filter((p) => p.name !== "Onboarding"),
+    [projects],
+  );
+
   const projectParam = new URLSearchParams(location.search).get("project");
-  const firstProjectId = activeProjects[0]?.id ?? null;
-  // Property selection is driven by the sidebar via the ?project= URL param.
-  const effectiveProjectId =
-    (projectParam && activeProjects.some((p) => p.id === projectParam) ? projectParam : null) ?? firstProjectId;
-  const currentProject = activeProjects.find((p) => p.id === effectiveProjectId);
+  // The sidebar may preselect a property via ?project=; otherwise the chatbox
+  // lets the manager choose per-request with @.
+  const preselectedId =
+    projectParam && activeProjects.some((p) => p.id === projectParam) ? projectParam : null;
 
-  // Keep the URL in sync with the shown property so the sidebar highlights it.
-  useEffect(() => {
-    if (!projectParam && firstProjectId) {
-      navigate({ pathname: "/dashboard", search: `?project=${firstProjectId}` }, { replace: true });
-    }
-  }, [projectParam, firstProjectId, navigate]);
+  const projectNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of activeProjects) map.set(p.id, p.name);
+    return map;
+  }, [activeProjects]);
 
-  const filteredIssues = useMemo(() => {
-    if (!issues || !effectiveProjectId) return [];
-    return issues
-      .filter((i) => i.projectId === effectiveProjectId)
+  const visibleIssues = useMemo(() => {
+    return (issues ?? [])
+      .filter((i) => i.projectId && projectNameById.has(i.projectId))
+      .filter((i) => (preselectedId ? i.projectId === preselectedId : true))
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  }, [issues, effectiveProjectId]);
+  }, [issues, projectNameById, preselectedId]);
 
-  const needsAttention = filteredIssues.filter((i) => i.status === "in_review");
-  const otherIssues = filteredIssues.filter((i) => i.status !== "in_review");
+  const needsAttention = visibleIssues.filter((i) => i.status === "in_review");
+  const otherIssues = visibleIssues.filter((i) => i.status !== "in_review");
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
+  const nameOf = (id: string | null | undefined) => (id ? projectNameById.get(id) ?? null : null);
+
   return (
-    <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-14">
-      <header className="pm-rise mb-7">
-        <p className="pm-accent mb-2 text-[13px] font-semibold uppercase tracking-[0.14em]">
-          {currentProject?.name ?? "Your properties"}
-        </p>
+    <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-16">
+      <header className="pm-rise mb-6">
         <h1 className="pm-display text-[2.3rem] leading-[1.08] text-foreground">{greeting}.</h1>
         <p className="mt-2 max-w-md text-[15px] leading-7 text-muted-foreground">
-          Tell us what you&apos;d like to change and we&apos;ll take care of the rest.
+          Tell us what to change on any property — type{" "}
+          <span className="pm-accent font-semibold">@</span> to pick one, and we&apos;ll take care of the rest.
         </p>
       </header>
 
-      <button
-        onClick={() => openNewIssue({ projectId: effectiveProjectId })}
-        className="pm-rise group mb-10 flex w-full items-center gap-3 rounded-[1.5rem] border border-border bg-card px-5 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_16px_40px_-24px_rgba(40,55,45,0.4)]"
-        style={{ animationDelay: "60ms" }}
-      >
-        <span className="min-w-0 flex-1 truncate text-[15px] text-muted-foreground">
-          What would you like to change{currentProject ? ` at ${currentProject.name}` : ""}?
-        </span>
-        <span className="pm-accent-bg flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-transform duration-200 group-hover:scale-105">
-          <ArrowUp className="h-4 w-4" />
-        </span>
-      </button>
+      {companyId ? (
+        <div className="pm-rise mb-10" style={{ animationDelay: "60ms" }}>
+          <PropertyChatComposer
+            companyId={companyId}
+            properties={activeProjects}
+            defaultPropertyId={preselectedId}
+            autoFocus
+          />
+        </div>
+      ) : null}
 
       {needsAttention.length > 0 && (
         <section className="mb-7">
@@ -141,7 +158,7 @@ function SimplifiedDashboard({
           </div>
           <div className="flex flex-col gap-2.5">
             {needsAttention.map((issue, i) => (
-              <RequestCard key={issue.id} issue={issue} index={i} />
+              <RequestCard key={issue.id} issue={issue} projectName={nameOf(issue.projectId)} index={i} />
             ))}
           </div>
         </section>
@@ -149,29 +166,20 @@ function SimplifiedDashboard({
 
       {otherIssues.length > 0 && (
         <section>
-          {needsAttention.length > 0 && (
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-              All requests
-            </h2>
-          )}
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+            {needsAttention.length > 0 ? "Earlier requests" : "Recent requests"}
+          </h2>
           <div className="flex flex-col gap-2.5">
             {otherIssues.map((issue, i) => (
-              <RequestCard key={issue.id} issue={issue} index={needsAttention.length + i} />
+              <RequestCard
+                key={issue.id}
+                issue={issue}
+                projectName={nameOf(issue.projectId)}
+                index={needsAttention.length + i}
+              />
             ))}
           </div>
         </section>
-      )}
-
-      {filteredIssues.length === 0 && (
-        <div className="pm-rise flex flex-col items-center justify-center px-6 py-16 text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-primary">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <p className="pm-display text-lg text-foreground">No requests yet</p>
-          <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
-            Start above and we&apos;ll take it from there.
-          </p>
-        </div>
       )}
     </div>
   );
@@ -318,6 +326,7 @@ export function Dashboard() {
   if (isSimplified) {
     return (
       <SimplifiedDashboard
+        companyId={selectedCompanyId ?? null}
         issues={issues}
         projects={projects}
       />
