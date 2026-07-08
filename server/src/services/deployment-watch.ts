@@ -154,6 +154,13 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
       w: { id: string; companyId: string; issueId: string; fixAttempts: number },
       reason: string,
     ) {
+      // Mark terminal FIRST: if any subsequent step throws, the watch is already
+      // in a terminal state so the next tick won't re-enter escalation and create
+      // duplicate admin-alert approvals.
+      await db
+        .update(deploymentWatches)
+        .set({ status: "failed", updatedAt: now })
+        .where(eq(deploymentWatches.id, w.id));
       const propertyName = await deps.getIssueProjectName(w.issueId, w.companyId);
       const approval = await deps.approvalsSvc.create(w.companyId, {
         type: "deploy_failed_review",
@@ -178,10 +185,6 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
         entityType: "issue",
         entityId: w.issueId,
       });
-      await db
-        .update(deploymentWatches)
-        .set({ status: "failed", updatedAt: now })
-        .where(eq(deploymentWatches.id, w.id));
     }
 
     for (const w of due) {

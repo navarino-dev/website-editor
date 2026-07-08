@@ -727,10 +727,11 @@ export async function startServer(): Promise<StartedServer> {
   if (config.heartbeatSchedulerEnabled) {
     const heartbeat = heartbeatService(db as any, { pluginWorkerManager });
     const routines = routineService(db as any, { pluginWorkerManager });
+    const projSvc = projectService(db as any);
     const deploymentWatch = createDeploymentWatch({
       db: db as any,
       issuesSvc: issueService(db as any),
-      projectsSvc: projectService(db as any),
+      projectsSvc: projSvc,
       approvalsSvc: approvalService(db as any),
       issueApprovalsSvc: issueApprovalService(db as any),
       logActivity: (input) => logActivity(db as any, input),
@@ -759,8 +760,8 @@ export async function startServer(): Promise<StartedServer> {
           .limit(1);
         const projectId = rows[0]?.projectId ?? null;
         if (!projectId) return null;
-        const project = await projectService(db as any).getById(projectId);
-        return (project as any)?.name ?? null;
+        const project = await projSvc.getById(projectId) as { name?: string | null } | null;
+        return project?.name ?? null;
       },
     });
     setDeploymentWatch(deploymentWatch);

@@ -651,6 +651,35 @@ describe("createDeploymentWatch", () => {
       });
     });
 
+    it("marks watch as failed even when approvalsSvc.create throws mid-escalation (no-respam guard)", async () => {
+      // This tests the critical ordering fix: db.update({status:"failed"}) runs
+      // BEFORE approvalsSvc.create so a partial failure leaves the watch terminal
+      // rather than stuck in "watching" and re-entering escalation on the next tick.
+      const now = new Date("2026-06-29T12:00:00Z");
+      const watch = makeWatch({
+        deadlineAt: new Date(now.getTime() + 60 * 60_000), // far future deadline
+        fixAttempts: 8, // >= MAX_FIX_WAKES → escalation path
+      });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const { deps } = makeDeps(db, null);
+      const depsCopy = {
+        ...deps,
+        approvalsSvc: {
+          create: vi.fn().mockRejectedValue(new Error("approval service down")),
+        },
+      };
+      mockPoll.mockResolvedValue("failure");
+
+      const svc = createDeploymentWatch(depsCopy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      // The per-watch try/catch swallows the throw from escalate(); must not propagate
+      await expect(svc.tick(now)).resolves.toBeDefined();
+
+      // The watch MUST have been marked failed before approvalsSvc.create was invoked,
+      // so even though the approval creation failed the watch is terminal (won't re-escalate).
+      expect(updatedSets).toHaveLength(1);
+      expect(updatedSets[0]?.values).toMatchObject({ status: "failed" });
+    });
+
     it("does not throw when poll throws for one watch; leaves it watching; still processes other due watches", async () => {
       const now = new Date("2026-06-29T12:00:00Z");
       const watch1 = makeWatch({
