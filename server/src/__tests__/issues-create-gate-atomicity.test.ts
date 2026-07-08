@@ -192,12 +192,15 @@ describe("issue create gate atomicity", () => {
   });
 
   describe("gated user-authored issue", () => {
-    it("creates issue as backlog, does not promote, does not wake", async () => {
+    it("creates issue as backlog, does not promote, does not wake, returns blocked status", async () => {
       vi.mocked(evaluateAndGate).mockResolvedValueOnce({
         gated: true,
         score: { score: 8, degraded: false },
         approvalId: "approval-1",
       } as any);
+
+      // Simulate the gate having written "blocked" to the DB; the re-fetch should pick this up.
+      mockIssueService.getById.mockResolvedValueOnce(makeIssue("issue-1", "blocked"));
 
       const app = await createUserApp();
       const res = await request(app)
@@ -212,14 +215,14 @@ describe("issue create gate atomicity", () => {
         expect.objectContaining({ status: "backlog" }),
       );
 
-      // must NOT promote (svc.update not called for status change)
-      expect(mockIssueService.update).not.toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ status: "todo" }),
-      );
+      // must NOT promote (svc.update must not be called at all)
+      expect(mockIssueService.update).not.toHaveBeenCalled();
 
       // must NOT wake the agent
       expect(mockWakeup).not.toHaveBeenCalled();
+
+      // response must reflect the real DB status set by the gate, not the stale in-memory "backlog"
+      expect(res.body.status).toBe("blocked");
     });
   });
 
@@ -285,10 +288,7 @@ describe("issue create gate atomicity", () => {
       expect(evaluateAndGate).not.toHaveBeenCalled();
 
       // svc.update must NOT be called for promotion
-      expect(mockIssueService.update).not.toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ status: "todo" }),
-      );
+      expect(mockIssueService.update).not.toHaveBeenCalled();
     });
   });
 });

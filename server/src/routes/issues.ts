@@ -3642,6 +3642,10 @@ export function issueRoutes(
       });
     }
     // gated: the gate already set status "blocked" + created the approval; do not promote or wake.
+    // Re-fetch so the 201 response reflects the real DB status (e.g. "blocked") not the stale in-memory value.
+    if (safetyGated) {
+      finalIssue = (await svc.getById(issue.id)) ?? finalIssue;
+    }
 
     res.status(201).json({
       ...finalIssue,
