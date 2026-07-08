@@ -188,6 +188,50 @@ export function approvalRoutes(
         }
       }
 
+      if (approval.type === "deploy_failed_review") {
+        const approverName = req.actor.userName ?? req.actor.userEmail ?? "an admin";
+        for (const iss of linkedIssues) {
+          if (iss.status === "blocked") {
+            await issuesSvc.update(iss.id, { status: "in_progress" });
+          }
+          await issuesSvc.addComment(
+            iss.id,
+            `**Republishing approved by ${approverName}.** The team is republishing your change now.`,
+            {},
+            {
+              authorType: "system",
+              presentation: { kind: "system_notice", tone: "success", title: "Republishing approved", detailsDefaultOpen: false },
+            },
+          );
+        }
+        for (const iss of linkedIssues) {
+          if (iss.assigneeAgentId) {
+            try {
+              await heartbeat.wakeup(iss.assigneeAgentId, {
+                source: "automation",
+                triggerDetail: "system",
+                reason: "deploy_failed",
+                payload: { issueId: iss.id },
+                requestedByActorType: "user",
+                requestedByActorId: req.actor.userId ?? "board",
+                contextSnapshot: { source: "approval.approved", issueId: iss.id, taskId: iss.id, wakeReason: "deploy_failed" },
+              });
+              await logActivity(db, {
+                companyId: approval.companyId,
+                actorType: "user",
+                actorId: req.actor.userId ?? "board",
+                action: "deployment.retry_requested",
+                entityType: "issue",
+                entityId: iss.id,
+                details: { issueId: iss.id, via: "admin_approval" },
+              });
+            } catch (err) {
+              logger.warn({ err, approvalId: approval.id }, "failed to wake editor after deploy_failed_review approval");
+            }
+          }
+        }
+      }
+
       if (approval.requestedByAgentId) {
         try {
           const wakeRun = await heartbeat.wakeup(approval.requestedByAgentId, {
@@ -291,6 +335,22 @@ export function approvalRoutes(
             {
               authorType: "system",
               presentation: { kind: "system_notice", tone: "danger", title: "Safety review declined", detailsDefaultOpen: false },
+            },
+          );
+        }
+      }
+
+      if (approval.type === "deploy_failed_review") {
+        const approverName = req.actor.userName ?? req.actor.userEmail ?? "an admin";
+        const linked = await issueApprovalsSvc.listIssuesForApproval(approval.id);
+        for (const iss of linked) {
+          await issuesSvc.addComment(
+            iss.id,
+            `**Republishing set aside by ${approverName}.** This change was left as-is for now.`,
+            {},
+            {
+              authorType: "system",
+              presentation: { kind: "system_notice", tone: "warning", title: "Republishing set aside", detailsDefaultOpen: false },
             },
           );
         }

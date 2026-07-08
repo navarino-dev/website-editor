@@ -161,7 +161,12 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
         .update(deploymentWatches)
         .set({ status: "failed", updatedAt: now })
         .where(eq(deploymentWatches.id, w.id));
-      const propertyName = await deps.getIssueProjectName(w.issueId, w.companyId);
+      let propertyName: string | null = null;
+      try {
+        propertyName = await deps.getIssueProjectName(w.issueId, w.companyId);
+      } catch {
+        propertyName = null;
+      }
       const approval = await deps.approvalsSvc.create(w.companyId, {
         type: "deploy_failed_review",
         requestedByAgentId: null,

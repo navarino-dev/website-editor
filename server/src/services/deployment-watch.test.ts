@@ -680,6 +680,40 @@ describe("createDeploymentWatch", () => {
       expect(updatedSets[0]?.values).toMatchObject({ status: "failed" });
     });
 
+    it("escalates with propertyName:null when getIssueProjectName rejects — approval still created, issue blocked, watch terminal", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      const watch = makeWatch({
+        deadlineAt: new Date(now.getTime() + 60 * 60_000), // far future deadline
+        fixAttempts: 8, // >= MAX_FIX_WAKES → escalation path
+      });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const { deps, createApproval, linkManyForApproval, updateIssue } = makeDeps(db, null);
+      const depsCopy = {
+        ...deps,
+        getIssueProjectName: vi.fn().mockRejectedValue(new Error("name lookup failed")),
+      };
+      mockPoll.mockResolvedValue("failure");
+
+      const svc = createDeploymentWatch(depsCopy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      await expect(svc.tick(now)).resolves.toBeDefined();
+
+      // Approval must still be created despite name lookup failure
+      expect(createApproval).toHaveBeenCalledOnce();
+      const approvalData = createApproval.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(approvalData).toMatchObject({ type: "deploy_failed_review", status: "pending" });
+      expect((approvalData["payload"] as Record<string, unknown>)).toMatchObject({
+        issueId: "issue-1",
+        propertyName: null,
+      });
+
+      // Issue blocked
+      expect(updateIssue).toHaveBeenCalledWith("issue-1", { status: "blocked" });
+      // Issues linked
+      expect(linkManyForApproval).toHaveBeenCalledWith("approval-1", ["issue-1"]);
+      // Watch marked failed
+      expect(updatedSets[0]?.values).toMatchObject({ status: "failed" });
+    });
+
     it("does not throw when poll throws for one watch; leaves it watching; still processes other due watches", async () => {
       const now = new Date("2026-06-29T12:00:00Z");
       const watch1 = makeWatch({

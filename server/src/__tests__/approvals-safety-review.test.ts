@@ -225,6 +225,104 @@ describe("safety-review approval routes", () => {
     });
   });
 
+  describe("deploy_failed_review approval routes", () => {
+    const pendingDeployFailedApproval = {
+      id: "approval-deploy-1",
+      companyId: "company-1",
+      type: "deploy_failed_review",
+      status: "pending",
+      payload: { issueId: "issue-blocked-1", propertyName: "Test Property", reason: "the deploy kept failing", attempts: 8 },
+      requestedByAgentId: null,
+    };
+
+    const blockedIssueWithAssignee = {
+      id: "issue-blocked-1",
+      status: "blocked",
+      assigneeAgentId: "editor-agent-1",
+    };
+
+    beforeEach(() => {
+      mockApprovalService.getById.mockResolvedValue(pendingDeployFailedApproval);
+      mockApprovalService.approve.mockResolvedValue({
+        approval: { ...pendingDeployFailedApproval, status: "approved" },
+        applied: true,
+      });
+      mockApprovalService.reject.mockResolvedValue({
+        approval: { ...pendingDeployFailedApproval, status: "rejected" },
+        applied: true,
+      });
+      mockIssueApprovalService.listIssuesForApproval.mockResolvedValue([blockedIssueWithAssignee]);
+    });
+
+    it("approving a blocked issue sets it to in_progress", async () => {
+      const app = await createApp();
+      const res = await request(app).post("/api/approvals/approval-deploy-1/approve").send({});
+      expect(res.status).toBe(200);
+      expect(mockIssueService.update).toHaveBeenCalledWith(blockedIssueWithAssignee.id, { status: "in_progress" });
+    });
+
+    it("approving posts a success system comment on the issue", async () => {
+      const app = await createApp();
+      await request(app).post("/api/approvals/approval-deploy-1/approve").send({});
+      expect(mockIssueService.addComment).toHaveBeenCalledWith(
+        blockedIssueWithAssignee.id,
+        expect.stringContaining("Republishing approved"),
+        {},
+        expect.objectContaining({
+          authorType: "system",
+          presentation: expect.objectContaining({
+            kind: "system_notice",
+            tone: "success",
+            title: "Republishing approved",
+          }),
+        }),
+      );
+    });
+
+    it("approving wakes the assignee agent with reason deploy_failed and the issueId", async () => {
+      const app = await createApp();
+      await request(app).post("/api/approvals/approval-deploy-1/approve").send({});
+      expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+        "editor-agent-1",
+        expect.objectContaining({
+          reason: "deploy_failed",
+          payload: expect.objectContaining({ issueId: blockedIssueWithAssignee.id }),
+        }),
+      );
+    });
+
+    it("rejecting leaves the issue blocked (update not called)", async () => {
+      const app = await createApp();
+      const res = await request(app).post("/api/approvals/approval-deploy-1/reject").send({});
+      expect(res.status).toBe(200);
+      expect(mockIssueService.update).not.toHaveBeenCalled();
+    });
+
+    it("rejecting posts a set-aside warning comment on the issue", async () => {
+      const app = await createApp();
+      await request(app).post("/api/approvals/approval-deploy-1/reject").send({});
+      expect(mockIssueService.addComment).toHaveBeenCalledWith(
+        blockedIssueWithAssignee.id,
+        expect.stringContaining("Republishing set aside"),
+        {},
+        expect.objectContaining({
+          authorType: "system",
+          presentation: expect.objectContaining({
+            kind: "system_notice",
+            tone: "warning",
+            title: "Republishing set aside",
+          }),
+        }),
+      );
+    });
+
+    it("rejecting does not wake any agent", async () => {
+      const app = await createApp();
+      await request(app).post("/api/approvals/approval-deploy-1/reject").send({});
+      expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+    });
+  });
+
   describe("non-safety approval type — not gated", () => {
     it("allows operator to approve a hire_agent approval without 403", async () => {
       mockApprovalService.getById.mockResolvedValue({
