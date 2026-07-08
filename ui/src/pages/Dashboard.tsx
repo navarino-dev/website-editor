@@ -19,8 +19,8 @@ import { StatusIcon } from "../components/StatusIcon";
 import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
-import { formatCents } from "../lib/utils";
-import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, ChevronRight, Sparkles } from "lucide-react";
+import { cn, formatCents } from "../lib/utils";
+import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, ChevronRight, ChevronDown, ClipboardList, Sparkles } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
@@ -127,6 +127,8 @@ function SimplifiedDashboard({
 
   const nameOf = (id: string | null | undefined) => (id ? projectNameById.get(id) ?? null : null);
 
+  const [showHistory, setShowHistory] = useState(false);
+
   return (
     <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-16">
       <header className="pm-rise mb-6">
@@ -148,38 +150,72 @@ function SimplifiedDashboard({
         </div>
       ) : null}
 
-      {needsAttention.length > 0 && (
-        <section className="mb-7">
-          <div className="mb-3 flex items-center gap-2">
-            <Sparkles className="pm-accent h-3.5 w-3.5" />
-            <h2 className="pm-accent text-xs font-semibold uppercase tracking-[0.12em]">
-              Needs your review
-            </h2>
-          </div>
-          <div className="flex flex-col gap-2.5">
-            {needsAttention.map((issue, i) => (
-              <RequestCard key={issue.id} issue={issue} projectName={nameOf(issue.projectId)} index={i} />
-            ))}
-          </div>
-        </section>
+      {visibleIssues.length > 0 && (
+        <div className="pm-rise mt-2 flex justify-center" style={{ animationDelay: "120ms" }}>
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            aria-expanded={showHistory}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[13px] font-medium transition-all duration-200",
+              !showHistory && needsAttention.length > 0
+                ? "pm-accent pm-accent-soft-bg border-transparent hover:brightness-[0.98]"
+                : "border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
+            )}
+          >
+            {!showHistory && needsAttention.length > 0 ? (
+              <Sparkles className="h-3.5 w-3.5" />
+            ) : (
+              <ClipboardList className="h-3.5 w-3.5" />
+            )}
+            {showHistory
+              ? "Hide requests"
+              : needsAttention.length > 0
+                ? `${needsAttention.length} ready for your review`
+                : `Your requests · ${visibleIssues.length}`}
+            <ChevronDown
+              className={cn("h-3.5 w-3.5 transition-transform duration-200", showHistory && "rotate-180")}
+            />
+          </button>
+        </div>
       )}
 
-      {otherIssues.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-            {needsAttention.length > 0 ? "Earlier requests" : "Recent requests"}
-          </h2>
-          <div className="flex flex-col gap-2.5">
-            {otherIssues.map((issue, i) => (
-              <RequestCard
-                key={issue.id}
-                issue={issue}
-                projectName={nameOf(issue.projectId)}
-                index={needsAttention.length + i}
-              />
-            ))}
-          </div>
-        </section>
+      {showHistory && (
+        <div className="mt-6">
+          {needsAttention.length > 0 && (
+            <section className="pm-rise mb-7">
+              <div className="mb-3 flex items-center gap-2">
+                <Sparkles className="pm-accent h-3.5 w-3.5" />
+                <h2 className="pm-accent text-xs font-semibold uppercase tracking-[0.12em]">
+                  Needs your review
+                </h2>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {needsAttention.map((issue, i) => (
+                  <RequestCard key={issue.id} issue={issue} projectName={nameOf(issue.projectId)} index={i} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {otherIssues.length > 0 && (
+            <section className="pm-rise">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+                {needsAttention.length > 0 ? "Earlier requests" : "Recent requests"}
+              </h2>
+              <div className="flex flex-col gap-2.5">
+                {otherIssues.map((issue, i) => (
+                  <RequestCard
+                    key={issue.id}
+                    issue={issue}
+                    projectName={nameOf(issue.projectId)}
+                    index={needsAttention.length + i}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );
