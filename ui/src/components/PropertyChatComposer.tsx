@@ -237,12 +237,18 @@ export function PropertyChatComposer({
 
   const hasProperties = properties.length > 0;
 
+  const hintText = createRequest.isError
+    ? "Something went wrong. Please try again."
+    : needsProperty
+      ? "Pick a property to send your request."
+      : "Type @ to tag a property · Enter to send";
+
   return (
     <div className="relative">
       {pickerOpen && filtered.length > 0 && (
         <div
           role="listbox"
-          className="pm-pop absolute inset-x-0 bottom-full z-30 mb-2 overflow-hidden rounded-2xl border border-border bg-popover p-1.5 shadow-[0_24px_60px_-24px_rgba(30,42,64,0.45)]"
+          className="pm-pop absolute inset-x-0 bottom-full z-30 mb-1.5 max-h-60 overflow-y-auto rounded-2xl border border-border bg-popover p-1.5 shadow-[0_24px_60px_-24px_rgba(30,42,64,0.45)]"
         >
           <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
             Choose a property
@@ -269,23 +275,35 @@ export function PropertyChatComposer({
 
       <div
         className={cn(
-          "rounded-[1.6rem] border bg-card p-3 shadow-[0_2px_10px_-6px_rgba(30,42,64,0.15)] transition-all duration-300 ease-out",
+          "rounded-[1.6rem] border bg-card px-3 pb-2.5 pt-3 shadow-[0_2px_10px_-6px_rgba(30,42,64,0.15)] transition-all duration-300 ease-out",
           "focus-within:-translate-y-0.5 focus-within:border-primary/40 focus-within:shadow-[0_22px_54px_-26px_rgba(30,42,64,0.5)]",
           needsProperty ? "border-primary/50" : "border-border",
         )}
       >
-        {selected ? (
-          <button
-            type="button"
-            onClick={openPicker}
-            className="pm-chip-in mb-1 ml-1 inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-[13px] font-medium text-accent-foreground transition-colors duration-150 hover:bg-accent/70"
-            title="Change property"
-          >
-            <PropertyDot color={selected.color} />
-            {selected.name}
-            <X className="h-3 w-3 opacity-50" />
-          </button>
-        ) : null}
+        <div className="mb-1.5 pl-1">
+          {selected ? (
+            <button
+              type="button"
+              onClick={openPicker}
+              className="pm-chip-in inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-[13px] font-medium text-accent-foreground transition-colors duration-150 hover:bg-accent/70"
+              title="Change property"
+            >
+              <PropertyDot color={selected.color} />
+              {selected.name}
+              <X className="h-3 w-3 opacity-50" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={openPicker}
+              disabled={!hasProperties}
+              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-[13px] font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/40 hover:text-foreground disabled:opacity-40"
+            >
+              <AtSign className="h-3.5 w-3.5" />
+              Choose a property
+            </button>
+          )}
+        </div>
 
         <textarea
           ref={textareaRef}
@@ -295,24 +313,15 @@ export function PropertyChatComposer({
           rows={1}
           placeholder={
             hasProperties
-              ? "Describe the change you'd like…  (type @ to pick a property)"
+              ? "Describe the change you'd like…"
               : "No properties available yet."
           }
           disabled={!hasProperties || createRequest.isPending}
-          className="block max-h-[220px] w-full resize-none border-0 bg-transparent px-2 py-1.5 text-[15px] leading-7 text-foreground outline-none placeholder:text-muted-foreground/70"
+          className="block max-h-[220px] w-full resize-none border-0 bg-transparent px-2 py-1 text-[15px] leading-7 text-foreground outline-none placeholder:text-muted-foreground/70"
         />
 
-        <div className="mt-1 flex items-center justify-between gap-3 pl-1">
-          <button
-            type="button"
-            onClick={openPicker}
-            disabled={!hasProperties}
-            className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] text-muted-foreground transition-colors duration-150 hover:text-foreground disabled:opacity-40"
-          >
-            <AtSign className="h-3.5 w-3.5" />
-            {selected ? "Change property" : "Choose property"}
-          </button>
-
+        <div className="mt-1.5 flex items-center justify-between gap-3 pl-2">
+          <span className="text-[12px] text-muted-foreground/70">{hintText}</span>
           <button
             type="button"
             onClick={submit}
@@ -333,14 +342,6 @@ export function PropertyChatComposer({
           </button>
         </div>
       </div>
-
-      <p className="mt-2 h-4 pl-3 text-[12px] text-muted-foreground/80">
-        {createRequest.isError
-          ? "Something went wrong. Please try again."
-          : needsProperty
-            ? "Pick a property with @ to send your request."
-            : ""}
-      </p>
     </div>
   );
 }

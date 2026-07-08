@@ -645,6 +645,21 @@ function extractLiveUrl(body: string): string | null {
   return match ? match[1] : null;
 }
 
+/** Claude/OpenAI-style three-dot "typing" indicator. Color follows currentColor. */
+function ThinkingDots({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn("thinking-dots inline-flex items-center gap-1", className)}
+      role="status"
+      aria-label="Working"
+    >
+      <span />
+      <span />
+      <span />
+    </span>
+  );
+}
+
 const IssueChatTextPart = memo(function IssueChatTextPart({ text, recessed }: { text: string; recessed?: boolean }) {
   const { onImageClick } = useContext(IssueChatCtx);
   const isSimplified = useIsSimplifiedView();
@@ -1546,6 +1561,9 @@ function IssueChatAssistantMessage({
   const canStopRun = Boolean(runId) && (isRunActive || runStatus === "queued" || runStatus === "running");
   const chainOfThoughtLabel = typeof custom.chainOfThoughtLabel === "string" ? custom.chainOfThoughtLabel : null;
   const hasCoT = message.content.some((p) => p.type === "reasoning" || p.type === "tool-call");
+  const hasVisibleText = message.content.some(
+    (p) => p.type === "text" && p.text.trim().length > 0,
+  );
   const isFoldable = !isRunning && !!chainOfThoughtLabel;
   const [folded, setFolded] = useState(isFoldable);
   const [prevFoldKey, setPrevFoldKey] = useState({ messageId: message.id, isFoldable });
@@ -1589,7 +1607,6 @@ function IssueChatAssistantMessage({
     !isRunning &&
     !waitingText &&
     notices.length === 0 &&
-    !hasCoT &&
     allTextPartsHiddenInSimplifiedView(message)
   ) {
     return null;
@@ -1632,7 +1649,7 @@ function IssueChatAssistantMessage({
                   Follow-up
                 </Badge>
               ) : null}
-              {isRunning ? (
+              {isRunning && !isSimplified ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-200">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   Running
@@ -1644,19 +1661,33 @@ function IssueChatAssistantMessage({
           {!folded ? (
             <>
               <div className="space-y-3">
-                <IssueChatAssistantParts message={message} hasCoT={hasCoT} />
-                {message.content.length === 0 && waitingText ? (
-                  <div className="flex items-center gap-2.5 rounded-lg px-1 py-2">
-                    <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground/80">
-                      {agentIcon ? (
-                        <AgentIcon icon={agentIcon} className="h-4 w-4 shrink-0" />
-                      ) : (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-                      )}
-                      <span className="shimmer-text">{waitingText}</span>
-                    </span>
-                  </div>
-                ) : null}
+                {isSimplified ? (
+                  <>
+                    {isRunning && !hasVisibleText ? (
+                      <div className="flex items-center gap-2.5 px-1 py-1.5">
+                        <ThinkingDots className="pm-accent" />
+                        <span className="text-sm text-muted-foreground">Working on your change…</span>
+                      </div>
+                    ) : null}
+                    <IssueChatTextParts message={message} />
+                  </>
+                ) : (
+                  <>
+                    <IssueChatAssistantParts message={message} hasCoT={hasCoT} />
+                    {message.content.length === 0 && waitingText ? (
+                      <div className="flex items-center gap-2.5 rounded-lg px-1 py-2">
+                        <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground/80">
+                          {agentIcon ? (
+                            <AgentIcon icon={agentIcon} className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+                          )}
+                          <span className="shimmer-text">{waitingText}</span>
+                        </span>
+                      </div>
+                    ) : null}
+                  </>
+                )}
                 {notices.length > 0 ? (
                   <div className="space-y-2">
                     {notices.map((notice, index) => (
