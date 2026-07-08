@@ -7,6 +7,7 @@ export const typeLabel: Record<string, string> = {
   budget_override_required: "Budget Override",
   request_board_approval: "Board Approval",
   safety_review_required: "Safety Review",
+  deploy_failed_review: "Publishing Issue",
 };
 
 function firstNonEmptyString(...values: unknown[]): string | null {
@@ -43,6 +44,7 @@ export const typeIcon: Record<string, typeof UserPlus> = {
   budget_override_required: ShieldAlert,
   request_board_approval: ShieldCheck,
   safety_review_required: ShieldAlert,
+  deploy_failed_review: ShieldAlert,
 };
 
 export const defaultTypeIcon = ShieldCheck;
@@ -231,6 +233,35 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
   );
 }
 
+function DeployFailedPayload({ payload }: { payload: Record<string, unknown> }) {
+  const propertyName = typeof payload.propertyName === "string" ? payload.propertyName : null;
+  const reason = typeof payload.reason === "string" ? payload.reason : null;
+  const attempts = typeof payload.attempts === "number" ? payload.attempts : null;
+  return (
+    <div className="mt-3 space-y-3 text-sm">
+      {propertyName && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Property</p>
+          <p className="font-medium leading-6 text-foreground">{propertyName}</p>
+        </div>
+      )}
+      <p className="text-muted-foreground">Publishing failed — needs your attention.</p>
+      {reason && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Reason</p>
+          <p className="leading-6 text-foreground/90">{reason}</p>
+        </div>
+      )}
+      {attempts !== null && (
+        <div className="rounded-lg border border-border/60 bg-muted/40 px-3.5 py-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Attempts</p>
+          <p className="mt-1 text-lg font-semibold text-foreground">{attempts}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SafetyReviewPayload({ payload }: { payload: Record<string, unknown> }) {
   const score = typeof payload.score === "number" ? payload.score : null;
   const reasoning = typeof payload.reasoning === "string" ? payload.reasoning : "";
@@ -283,5 +314,6 @@ export function ApprovalPayloadRenderer({
     return <BoardApprovalPayload payload={payload} hideTitle={hidePrimaryTitle} />;
   }
   if (type === "safety_review_required") return <SafetyReviewPayload payload={payload} />;
+  if (type === "deploy_failed_review") return <DeployFailedPayload payload={payload} />;
   return <CeoStrategyPayload payload={payload} />;
 }

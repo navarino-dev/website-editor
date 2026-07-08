@@ -86,6 +86,32 @@ describe("ApprovalPayloadRenderer", () => {
     });
   });
 
+  it("labels and renders a deploy_failed_review payload with property name and reason", () => {
+    expect(approvalLabel("deploy_failed_review")).toBe("Publishing Issue");
+
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <ApprovalPayloadRenderer
+          type="deploy_failed_review"
+          payload={{
+            propertyName: "Seaside Website",
+            reason: "Build failed: missing import",
+            attempts: 3,
+          }}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("Seaside Website");
+    expect(container.textContent).toContain("Build failed: missing import");
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
   it("labels and renders a safety_review_required payload with the score and reasoning", () => {
     expect(approvalLabel("safety_review_required")).toBe("Safety Review");
 

@@ -427,6 +427,7 @@ export const APPROVAL_TYPES = [
   "budget_override_required",
   "request_board_approval",
   "safety_review_required",
+  "deploy_failed_review",
 ] as const;
 export type ApprovalType = (typeof APPROVAL_TYPES)[number];
 
