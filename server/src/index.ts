@@ -31,10 +31,12 @@ import { loadConfig } from "./config.js";
 import { logger } from "./middleware/logger.js";
 import { setupLiveEventsWebSocketServer } from "./realtime/live-events-ws.js";
 import {
+  approvalService,
   feedbackService,
   backfillPrincipalAccessCompatibility,
   heartbeatService,
   instanceSettingsService,
+  issueApprovalService,
   issueService,
   logActivity,
   projectService,
@@ -729,6 +731,8 @@ export async function startServer(): Promise<StartedServer> {
       db: db as any,
       issuesSvc: issueService(db as any),
       projectsSvc: projectService(db as any),
+      approvalsSvc: approvalService(db as any),
+      issueApprovalsSvc: issueApprovalService(db as any),
       logActivity: (input) => logActivity(db as any, input),
       getToken: () => process.env.GITHUB_TOKEN,
       getIssueAssignee: async (issueId, companyId) => {
@@ -747,6 +751,17 @@ export async function startServer(): Promise<StartedServer> {
           requestedByActorId: "system",
           ...opts,
         }),
+      getIssueProjectName: async (issueId, companyId) => {
+        const rows = await (db as any)
+          .select({ projectId: issues.projectId })
+          .from(issues)
+          .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)))
+          .limit(1);
+        const projectId = rows[0]?.projectId ?? null;
+        if (!projectId) return null;
+        const project = await projectService(db as any).getById(projectId);
+        return (project as any)?.name ?? null;
+      },
     });
     setDeploymentWatch(deploymentWatch);
   

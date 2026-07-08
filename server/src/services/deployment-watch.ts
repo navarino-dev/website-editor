@@ -8,6 +8,8 @@ import { getLatestProductionDeployStatus } from "./github-deployments.js";
 const POLL_MS = 15_000;
 const RETRY_POLL_MS = 3 * 60_000;
 const DEADLINE_MS = 10 * 60_000;
+const FIX_BUDGET_MS = 30 * 60_000;
+const MAX_FIX_WAKES = 8;
 
 const LIVE_BODY = (url: string) =>
   `✨ Your change is now live.\n\nLIVE_URL: ${url}`;
@@ -36,6 +38,15 @@ export interface DeploymentWatchDeps {
       actor: Actor,
       options?: { authorType?: IssueCommentAuthorType | null; presentation?: IssueCommentPresentation | null },
     ) => Promise<unknown>;
+    update: (issueId: string, data: Record<string, unknown>) => Promise<unknown>;
+  };
+  approvalsSvc: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    create: (companyId: string, data: any) => Promise<{ id: string }>;
+  };
+  issueApprovalsSvc: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    linkManyForApproval: (approvalId: string, issueIds: string[], actor?: any) => Promise<unknown>;
   };
   projectsSvc: {
     getById: (id: string) => Promise<{
@@ -47,6 +58,7 @@ export interface DeploymentWatchDeps {
   getToken: () => string | undefined;
   getIssueAssignee: (issueId: string, companyId: string) => Promise<string | null>;
   wakeAgent: (agentId: string, opts: { reason: string; payload?: Record<string, unknown>; contextSnapshot?: Record<string, unknown> }) => Promise<unknown>;
+  getIssueProjectName: (issueId: string, companyId: string) => Promise<string | null>;
 }
 
 const SYS_ACTOR: Actor = {};
@@ -138,6 +150,40 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
     let failed = 0;
     const token = deps.getToken();
 
+    async function escalate(
+      w: { id: string; companyId: string; issueId: string; fixAttempts: number },
+      reason: string,
+    ) {
+      const propertyName = await deps.getIssueProjectName(w.issueId, w.companyId);
+      const approval = await deps.approvalsSvc.create(w.companyId, {
+        type: "deploy_failed_review",
+        requestedByAgentId: null,
+        requestedByUserId: null,
+        status: "pending",
+        payload: {
+          issueId: w.issueId,
+          propertyName,
+          reason,
+          attempts: w.fixAttempts,
+        },
+      });
+      await deps.issueApprovalsSvc.linkManyForApproval(approval.id, [w.issueId]);
+      await deps.issuesSvc.update(w.issueId, { status: "blocked" });
+      await post(w.issueId, FAILED_BODY, "danger");
+      await deps.logActivity({
+        companyId: w.companyId,
+        actorType: "system",
+        actorId: "system",
+        action: "deployment.failed",
+        entityType: "issue",
+        entityId: w.issueId,
+      });
+      await db
+        .update(deploymentWatches)
+        .set({ status: "failed", updatedAt: now })
+        .where(eq(deploymentWatches.id, w.id));
+    }
+
     for (const w of due) {
       try {
         const state = token
@@ -156,8 +202,11 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
             .where(eq(deploymentWatches.id, w.id));
           live++;
         } else if (state === "failure") {
-          if (w.fixAttempts < 3) {
-            // Under cap: wake the assignee to fix and retry
+          const overBudget = w.fixAttempts >= 1 && now >= w.deadlineAt;
+          const overCap = w.fixAttempts >= MAX_FIX_WAKES;
+          if (overBudget || overCap) {
+            await escalate(w, "the deploy kept failing");
+          } else {
             const assignee = await deps.getIssueAssignee(w.issueId, w.companyId);
             if (assignee) {
               await deps.wakeAgent(assignee, {
@@ -187,34 +236,26 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
                 fixAttempts: w.fixAttempts + 1,
                 startedAt: now,
                 nextCheckAt: new Date(now.getTime() + RETRY_POLL_MS),
-                deadlineAt: new Date(now.getTime() + DEADLINE_MS),
+                deadlineAt: w.fixAttempts === 0
+                  ? new Date(now.getTime() + FIX_BUDGET_MS)
+                  : w.deadlineAt,
                 updatedAt: now,
               })
-              .where(eq(deploymentWatches.id, w.id));
-          } else {
-            // At/over cap: escalate terminally
-            await post(w.issueId, FAILED_BODY, "danger");
-            await deps.logActivity({
-              companyId: w.companyId,
-              actorType: "system",
-              actorId: "system",
-              action: "deployment.failed",
-              entityType: "issue",
-              entityId: w.issueId,
-            });
-            await db
-              .update(deploymentWatches)
-              .set({ status: "failed", updatedAt: now })
               .where(eq(deploymentWatches.id, w.id));
           }
           failed++;
         } else if (now >= w.deadlineAt) {
-          await post(w.issueId, DELAYED_BODY, "warning");
-          await db
-            .update(deploymentWatches)
-            .set({ status: "delayed", updatedAt: now })
-            .where(eq(deploymentWatches.id, w.id));
-          delayed++;
+          if (w.fixAttempts >= 1) {
+            await escalate(w, "the deploy never came back");
+            failed++;
+          } else {
+            await post(w.issueId, DELAYED_BODY, "warning");
+            await db
+              .update(deploymentWatches)
+              .set({ status: "delayed", updatedAt: now })
+              .where(eq(deploymentWatches.id, w.id));
+            delayed++;
+          }
         } else {
           await db
             .update(deploymentWatches)

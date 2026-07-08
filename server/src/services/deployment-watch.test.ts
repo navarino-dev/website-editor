@@ -88,27 +88,35 @@ function makeDeps(
   options: {
     getIssueAssignee?: (issueId: string, companyId: string) => Promise<string | null>;
     wakeAgent?: (agentId: string, opts: { reason: string; payload?: Record<string, unknown>; contextSnapshot?: Record<string, unknown> }) => Promise<unknown>;
+    approvalResult?: { id: string };
   } = {},
 ) {
   const addComment = vi.fn().mockResolvedValue(undefined);
+  const updateIssue = vi.fn().mockResolvedValue(undefined);
   const logActivity = vi.fn().mockResolvedValue(undefined);
   const getToken = vi.fn().mockReturnValue("gh-token");
   const getIssueAssignee = options.getIssueAssignee ?? vi.fn().mockResolvedValue(null);
   const wakeAgent = options.wakeAgent ?? vi.fn().mockResolvedValue(undefined);
+  const createApproval = vi.fn().mockResolvedValue(options.approvalResult ?? { id: "approval-1" });
+  const linkManyForApproval = vi.fn().mockResolvedValue(undefined);
+  const getIssueProjectName = vi.fn().mockResolvedValue("Test Property");
 
   const deps = {
     db: db as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-    issuesSvc: { addComment },
+    issuesSvc: { addComment, update: updateIssue },
     projectsSvc: {
       getById: vi.fn().mockResolvedValue(projectResult),
     },
+    approvalsSvc: { create: createApproval },
+    issueApprovalsSvc: { linkManyForApproval },
     logActivity,
     getToken,
     getIssueAssignee,
     wakeAgent,
+    getIssueProjectName,
   };
 
-  return { deps, addComment, logActivity, getIssueAssignee, wakeAgent };
+  return { deps, addComment, updateIssue, logActivity, getIssueAssignee, wakeAgent, createApproval, linkManyForApproval, getIssueProjectName };
 }
 
 const PUBLISHING_BODY =
@@ -205,18 +213,14 @@ describe("createDeploymentWatch", () => {
 
     it("resolves (does not throw) when projectsSvc.getById rejects", async () => {
       const { db } = createFakeDb([]);
-      const deps = {
-        db: db as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-        issuesSvc: { addComment: vi.fn().mockResolvedValue(undefined) },
+      const { deps } = makeDeps(db, null);
+      const depsCopy = {
+        ...deps,
         projectsSvc: {
           getById: vi.fn().mockRejectedValue(new Error("DB connection lost")),
         },
-        logActivity: vi.fn().mockResolvedValue(undefined),
-        getToken: vi.fn().mockReturnValue("gh-token"),
-        getIssueAssignee: vi.fn().mockResolvedValue(null),
-        wakeAgent: vi.fn().mockResolvedValue(undefined),
       };
-      const svc = createDeploymentWatch(deps);
+      const svc = createDeploymentWatch(depsCopy as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       await expect(
         svc.onIssueDone({ id: "issue-1", companyId: "company-1", projectId: "project-1" }),
@@ -226,23 +230,18 @@ describe("createDeploymentWatch", () => {
     it("resolves (does not throw) when issuesSvc.addComment rejects", async () => {
       // select returns [] (no existing watch), insert resolves, but addComment rejects
       const { db } = createFakeDb([[]]);
-      const deps = {
-        db: db as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+      const { deps } = makeDeps(db, {
+        productionUrl: "https://example.com",
+        codebase: { repoUrl: "https://github.com/org/repo" },
+      });
+      const depsCopy = {
+        ...deps,
         issuesSvc: {
+          ...deps.issuesSvc,
           addComment: vi.fn().mockRejectedValue(new Error("comment service unavailable")),
         },
-        projectsSvc: {
-          getById: vi.fn().mockResolvedValue({
-            productionUrl: "https://example.com",
-            codebase: { repoUrl: "https://github.com/org/repo" },
-          }),
-        },
-        logActivity: vi.fn().mockResolvedValue(undefined),
-        getToken: vi.fn().mockReturnValue("gh-token"),
-        getIssueAssignee: vi.fn().mockResolvedValue(null),
-        wakeAgent: vi.fn().mockResolvedValue(undefined),
       };
-      const svc = createDeploymentWatch(deps);
+      const svc = createDeploymentWatch(depsCopy);
 
       await expect(
         svc.onIssueDone({ id: "issue-1", companyId: "company-1", projectId: "project-1" }),
@@ -258,7 +257,7 @@ describe("createDeploymentWatch", () => {
       const now = new Date("2026-06-29T12:00:00Z");
       const watch = makeWatch({ deadlineAt: new Date(now.getTime() + 10 * 60_000) });
       const { db, updatedSets } = createFakeDb([[watch]]);
-      const { deps, addComment } = makeDeps(db, null);
+      const { deps, addComment, createApproval } = makeDeps(db, null);
       mockPoll.mockResolvedValue("success");
 
       const svc = createDeploymentWatch(deps);
@@ -274,14 +273,16 @@ describe("createDeploymentWatch", () => {
       );
       expect(updatedSets).toHaveLength(1);
       expect(updatedSets[0]?.values).toMatchObject({ status: "live" });
+      // No approval created on success
+      expect(createApproval).not.toHaveBeenCalled();
     });
 
-    it("posts the delayed comment and sets status=delayed when past deadline with pending state", async () => {
+    it("posts the delayed comment and sets status=delayed when past deadline with pending state and no prior fix attempts", async () => {
       const now = new Date("2026-06-29T12:00:00Z");
-      // deadlineAt is in the past relative to now
-      const watch = makeWatch({ deadlineAt: new Date(now.getTime() - 1) });
+      // deadlineAt is in the past relative to now, fixAttempts=0 (never failed before)
+      const watch = makeWatch({ deadlineAt: new Date(now.getTime() - 1), fixAttempts: 0 });
       const { db, updatedSets } = createFakeDb([[watch]]);
-      const { deps, addComment } = makeDeps(db, null);
+      const { deps, addComment, createApproval } = makeDeps(db, null);
       mockPoll.mockResolvedValue("pending");
 
       const svc = createDeploymentWatch(deps);
@@ -296,13 +297,68 @@ describe("createDeploymentWatch", () => {
         { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
       );
       expect(updatedSets[0]?.values).toMatchObject({ status: "delayed" });
+      expect(createApproval).not.toHaveBeenCalled();
     });
 
-    it("posts the failed comment, calls logActivity, and sets status=failed on deploy failure at cap (fixAttempts >= 3)", async () => {
+    it("escalates on deadline exceeded when there were prior fix attempts", async () => {
       const now = new Date("2026-06-29T12:00:00Z");
-      const watch = makeWatch({ deadlineAt: new Date(now.getTime() + 10 * 60_000), fixAttempts: 3 });
+      // deadlineAt in the past, fixAttempts=2 (had failures before)
+      const watch = makeWatch({ deadlineAt: new Date(now.getTime() - 1), fixAttempts: 2 });
       const { db, updatedSets } = createFakeDb([[watch]]);
-      const { deps, addComment, logActivity, wakeAgent } = makeDeps(db, null);
+      const { deps, addComment, logActivity, createApproval, linkManyForApproval, updateIssue, wakeAgent } = makeDeps(db, null);
+      mockPoll.mockResolvedValue("pending");
+
+      const svc = createDeploymentWatch(deps);
+      const result = await svc.tick(now);
+
+      expect(result).toEqual({ live: 0, delayed: 0, failed: 1 });
+      // No wake – escalation, not retry
+      expect(wakeAgent).not.toHaveBeenCalled();
+      // Terminal FAILED comment
+      expect(addComment).toHaveBeenCalledWith(
+        "issue-1",
+        FAILED_BODY,
+        {},
+        { authorType: "system", presentation: { kind: "system_notice", tone: "danger", detailsDefaultOpen: false } },
+      );
+      // Approval created
+      expect(createApproval).toHaveBeenCalledWith(
+        "company-1",
+        expect.objectContaining({ type: "deploy_failed_review" }),
+      );
+      const approvalData = createApproval.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(approvalData).toMatchObject({
+        type: "deploy_failed_review",
+        requestedByAgentId: null,
+        requestedByUserId: null,
+        status: "pending",
+      });
+      expect((approvalData["payload"] as Record<string, unknown>)).toMatchObject({
+        issueId: "issue-1",
+        propertyName: "Test Property",
+        reason: "the deploy never came back",
+        attempts: 2,
+      });
+      // Issues linked
+      expect(linkManyForApproval).toHaveBeenCalledWith("approval-1", ["issue-1"]);
+      // Issue blocked
+      expect(updateIssue).toHaveBeenCalledWith("issue-1", { status: "blocked" });
+      // Activity logged
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "deployment.failed", entityId: "issue-1" }),
+      );
+      // Watch marked failed
+      expect(updatedSets[0]?.values).toMatchObject({ status: "failed" });
+    });
+
+    it("escalates when MAX_FIX_WAKES (8) reached even with future deadline", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      const watch = makeWatch({
+        deadlineAt: new Date(now.getTime() + 60 * 60_000), // 1h in the future
+        fixAttempts: 8,
+      });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const { deps, addComment, logActivity, createApproval, linkManyForApproval, updateIssue, wakeAgent } = makeDeps(db, null);
       mockPoll.mockResolvedValue("failure");
 
       const svc = createDeploymentWatch(deps);
@@ -310,24 +366,159 @@ describe("createDeploymentWatch", () => {
 
       expect(result).toEqual({ live: 0, delayed: 0, failed: 1 });
       expect(wakeAgent).not.toHaveBeenCalled();
-      expect(addComment).toHaveBeenCalledOnce();
+      expect(createApproval).toHaveBeenCalledWith(
+        "company-1",
+        expect.objectContaining({ type: "deploy_failed_review" }),
+      );
+      const approvalData = createApproval.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect((approvalData["payload"] as Record<string, unknown>)).toMatchObject({
+        reason: "the deploy kept failing",
+        attempts: 8,
+      });
+      expect(linkManyForApproval).toHaveBeenCalledWith("approval-1", ["issue-1"]);
+      expect(updateIssue).toHaveBeenCalledWith("issue-1", { status: "blocked" });
       expect(addComment).toHaveBeenCalledWith(
         "issue-1",
         FAILED_BODY,
         {},
         { authorType: "system", presentation: { kind: "system_notice", tone: "danger", detailsDefaultOpen: false } },
       );
-      expect(logActivity).toHaveBeenCalledOnce();
       expect(logActivity).toHaveBeenCalledWith(
-        expect.objectContaining({
-          companyId: "company-1",
-          actorType: "system",
-          action: "deployment.failed",
-          entityType: "issue",
-          entityId: "issue-1",
-        }),
+        expect.objectContaining({ action: "deployment.failed", entityId: "issue-1" }),
       );
       expect(updatedSets[0]?.values).toMatchObject({ status: "failed" });
+    });
+
+    it("escalates when budget exceeded (fixAttempts >= 1 && now >= deadlineAt) on failure state", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      const watch = makeWatch({
+        deadlineAt: new Date(now.getTime() - 1), // past deadline
+        fixAttempts: 2,
+      });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const { deps, addComment, logActivity, createApproval, linkManyForApproval, updateIssue, wakeAgent } = makeDeps(db, null);
+      mockPoll.mockResolvedValue("failure");
+
+      const svc = createDeploymentWatch(deps);
+      const result = await svc.tick(now);
+
+      expect(result).toEqual({ live: 0, delayed: 0, failed: 1 });
+      expect(wakeAgent).not.toHaveBeenCalled();
+      expect(createApproval).toHaveBeenCalledWith(
+        "company-1",
+        expect.objectContaining({ type: "deploy_failed_review" }),
+      );
+      const approvalData = createApproval.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect((approvalData["payload"] as Record<string, unknown>)).toMatchObject({
+        issueId: "issue-1",
+        propertyName: "Test Property",
+        reason: "the deploy kept failing",
+        attempts: 2,
+      });
+      expect(linkManyForApproval).toHaveBeenCalledWith("approval-1", ["issue-1"]);
+      expect(updateIssue).toHaveBeenCalledWith("issue-1", { status: "blocked" });
+      expect(addComment).toHaveBeenCalledWith(
+        "issue-1",
+        FAILED_BODY,
+        {},
+        { authorType: "system", presentation: { kind: "system_notice", tone: "danger", detailsDefaultOpen: false } },
+      );
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "deployment.failed" }),
+      );
+      expect(updatedSets[0]?.values).toMatchObject({ status: "failed" });
+    });
+
+    it("first failure (fixAttempts=0) sets 30-min budget and retries without escalating", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      const watch = makeWatch({
+        deadlineAt: new Date(now.getTime() + 10 * 60_000), // initial short deadline
+        fixAttempts: 0,
+      });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const wakeAgent = vi.fn().mockResolvedValue(undefined);
+      const getIssueAssignee = vi.fn().mockResolvedValue("agentA");
+      const { deps, addComment, logActivity, createApproval, updateIssue } = makeDeps(db, null, { wakeAgent, getIssueAssignee });
+      mockPoll.mockResolvedValue("failure");
+
+      const svc = createDeploymentWatch(deps);
+      const result = await svc.tick(now);
+
+      expect(result).toEqual({ live: 0, delayed: 0, failed: 1 });
+
+      // Woke assignee
+      expect(wakeAgent).toHaveBeenCalledOnce();
+
+      // No escalation
+      expect(createApproval).not.toHaveBeenCalled();
+      expect(updateIssue).not.toHaveBeenCalled();
+
+      // Posted warning comment (not terminal FAILED_BODY)
+      expect(addComment).toHaveBeenCalledWith(
+        "issue-1",
+        "That change ran into a snag while publishing. I'm fixing it and trying again.",
+        {},
+        { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
+      );
+
+      // Logged retry_requested
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "deployment.retry_requested", details: { fixAttempt: 1 } }),
+      );
+
+      // Watch updated: fixAttempts incremented, startedAt advanced, deadlineAt set to 30 min budget, nextCheckAt set to RETRY_POLL_MS
+      const updated = updatedSets[0]?.values as Record<string, unknown>;
+      expect(updated).toMatchObject({
+        status: "watching",
+        fixAttempts: 1,
+        startedAt: now,
+      });
+      const nextCheck = updated?.["nextCheckAt"] as Date;
+      expect(nextCheck instanceof Date).toBe(true);
+      expect(nextCheck.getTime() - now.getTime()).toBeCloseTo(3 * 60_000, -2);
+      // deadlineAt should be extended to ~30 minutes from now
+      const newDeadline = updated?.["deadlineAt"] as Date;
+      expect(newDeadline instanceof Date).toBe(true);
+      expect(newDeadline.getTime() - now.getTime()).toBeCloseTo(30 * 60_000, -2);
+    });
+
+    it("within-budget subsequent failure (fixAttempts=2, future deadline) retries without escalating", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      const existingDeadline = new Date(now.getTime() + 20 * 60_000); // 20 min future
+      const watch = makeWatch({
+        deadlineAt: existingDeadline,
+        fixAttempts: 2,
+      });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const wakeAgent = vi.fn().mockResolvedValue(undefined);
+      const getIssueAssignee = vi.fn().mockResolvedValue("agentA");
+      const { deps, createApproval, updateIssue, logActivity } = makeDeps(db, null, { wakeAgent, getIssueAssignee });
+      mockPoll.mockResolvedValue("failure");
+
+      const svc = createDeploymentWatch(deps);
+      await svc.tick(now);
+
+      // No escalation
+      expect(createApproval).not.toHaveBeenCalled();
+      expect(updateIssue).not.toHaveBeenCalled();
+
+      // Woke assignee
+      expect(wakeAgent).toHaveBeenCalledOnce();
+
+      // Logged retry
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "deployment.retry_requested", details: { fixAttempt: 3 } }),
+      );
+
+      // Watch updated: fixAttempts 2→3, deadlineAt UNCHANGED (not refreshed)
+      const updated = updatedSets[0]?.values as Record<string, unknown>;
+      expect(updated).toMatchObject({
+        status: "watching",
+        fixAttempts: 3,
+        startedAt: now,
+      });
+      // deadlineAt stays the same (not reset on subsequent failures)
+      expect((updated?.["deadlineAt"] as Date).getTime()).toBe(existingDeadline.getTime());
     });
 
     it("bumps nextCheckAt by ~15s and posts no comment when pending before deadline", async () => {
@@ -405,6 +596,10 @@ describe("createDeploymentWatch", () => {
       expect(nextCheck instanceof Date).toBe(true);
       // nextCheckAt should be ~3 minutes (RETRY_POLL_MS), not 15s
       expect(nextCheck.getTime() - now.getTime()).toBeCloseTo(3 * 60_000, -2);
+      // deadlineAt extended to 30-min budget on first failure
+      const newDeadline = updated?.["deadlineAt"] as Date;
+      expect(newDeadline instanceof Date).toBe(true);
+      expect(newDeadline.getTime() - now.getTime()).toBeCloseTo(30 * 60_000, -2);
     });
 
     it("on failure under cap with no assignee: skips wake, still posts comment, increments fixAttempts, keeps watching", async () => {
