@@ -57,6 +57,7 @@ function makeWatch(overrides: Partial<{
   productionUrl: string;
   status: string;
   attempts: number;
+  fixAttempts: number;
   startedAt: Date;
   deadlineAt: Date;
   nextCheckAt: Date;
@@ -70,6 +71,7 @@ function makeWatch(overrides: Partial<{
     productionUrl: "https://example.com",
     status: "watching",
     attempts: 0,
+    fixAttempts: 0,
     startedAt: new Date(now.getTime() - 60_000),
     deadlineAt: new Date(now.getTime() + 10 * 60_000), // 10 min ahead = before deadline
     nextCheckAt: now,
@@ -83,10 +85,16 @@ function makeWatch(overrides: Partial<{
 function makeDeps(
   db: ReturnType<typeof createFakeDb>["db"],
   projectResult: { productionUrl: string | null; codebase: { repoUrl: string | null } } | null,
+  options: {
+    getIssueAssignee?: (issueId: string) => Promise<string | null>;
+    wakeAgent?: (agentId: string, opts: { reason: string; payload?: Record<string, unknown>; contextSnapshot?: Record<string, unknown> }) => Promise<unknown>;
+  } = {},
 ) {
   const addComment = vi.fn().mockResolvedValue(undefined);
   const logActivity = vi.fn().mockResolvedValue(undefined);
   const getToken = vi.fn().mockReturnValue("gh-token");
+  const getIssueAssignee = options.getIssueAssignee ?? vi.fn().mockResolvedValue(null);
+  const wakeAgent = options.wakeAgent ?? vi.fn().mockResolvedValue(undefined);
 
   const deps = {
     db: db as any, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -96,9 +104,11 @@ function makeDeps(
     },
     logActivity,
     getToken,
+    getIssueAssignee,
+    wakeAgent,
   };
 
-  return { deps, addComment, logActivity };
+  return { deps, addComment, logActivity, getIssueAssignee, wakeAgent };
 }
 
 const PUBLISHING_BODY =
@@ -203,6 +213,8 @@ describe("createDeploymentWatch", () => {
         },
         logActivity: vi.fn().mockResolvedValue(undefined),
         getToken: vi.fn().mockReturnValue("gh-token"),
+        getIssueAssignee: vi.fn().mockResolvedValue(null),
+        wakeAgent: vi.fn().mockResolvedValue(undefined),
       };
       const svc = createDeploymentWatch(deps);
 
@@ -227,6 +239,8 @@ describe("createDeploymentWatch", () => {
         },
         logActivity: vi.fn().mockResolvedValue(undefined),
         getToken: vi.fn().mockReturnValue("gh-token"),
+        getIssueAssignee: vi.fn().mockResolvedValue(null),
+        wakeAgent: vi.fn().mockResolvedValue(undefined),
       };
       const svc = createDeploymentWatch(deps);
 
@@ -284,17 +298,18 @@ describe("createDeploymentWatch", () => {
       expect(updatedSets[0]?.values).toMatchObject({ status: "delayed" });
     });
 
-    it("posts the failed comment, calls logActivity, and sets status=failed on deploy failure", async () => {
+    it("posts the failed comment, calls logActivity, and sets status=failed on deploy failure at cap (fixAttempts >= 3)", async () => {
       const now = new Date("2026-06-29T12:00:00Z");
-      const watch = makeWatch({ deadlineAt: new Date(now.getTime() + 10 * 60_000) });
+      const watch = makeWatch({ deadlineAt: new Date(now.getTime() + 10 * 60_000), fixAttempts: 3 });
       const { db, updatedSets } = createFakeDb([[watch]]);
-      const { deps, addComment, logActivity } = makeDeps(db, null);
+      const { deps, addComment, logActivity, wakeAgent } = makeDeps(db, null);
       mockPoll.mockResolvedValue("failure");
 
       const svc = createDeploymentWatch(deps);
       const result = await svc.tick(now);
 
       expect(result).toEqual({ live: 0, delayed: 0, failed: 1 });
+      expect(wakeAgent).not.toHaveBeenCalled();
       expect(addComment).toHaveBeenCalledOnce();
       expect(addComment).toHaveBeenCalledWith(
         "issue-1",
@@ -332,6 +347,89 @@ describe("createDeploymentWatch", () => {
       const nextCheck = updated?.["nextCheckAt"] as Date;
       expect(nextCheck instanceof Date).toBe(true);
       expect(nextCheck.getTime() - now.getTime()).toBeCloseTo(15_000, -2);
+    });
+
+    it("on failure under cap: wakes the assignee, posts a warning comment, increments fixAttempts, keeps watching", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      const watch = makeWatch({ deadlineAt: new Date(now.getTime() + 10 * 60_000), fixAttempts: 0 });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const wakeAgent = vi.fn().mockResolvedValue(undefined);
+      const getIssueAssignee = vi.fn().mockResolvedValue("agentA");
+      const { deps, addComment, logActivity } = makeDeps(db, null, { wakeAgent, getIssueAssignee });
+      mockPoll.mockResolvedValue("failure");
+
+      const svc = createDeploymentWatch(deps);
+      const result = await svc.tick(now);
+
+      // Counts as a failure event
+      expect(result).toEqual({ live: 0, delayed: 0, failed: 1 });
+
+      // Woke the assignee
+      expect(wakeAgent).toHaveBeenCalledOnce();
+      expect(wakeAgent).toHaveBeenCalledWith("agentA", {
+        reason: "deploy_failed",
+        payload: { issueId: "issue-1", fixAttempt: 1 },
+        contextSnapshot: { issueId: "issue-1", source: "deployment.failed" },
+      });
+
+      // Posted a warning (actionable) comment, not the terminal FAILED_BODY
+      expect(addComment).toHaveBeenCalledOnce();
+      expect(addComment).toHaveBeenCalledWith(
+        "issue-1",
+        "That change ran into a snag while publishing. I'm fixing it and trying again.",
+        {},
+        { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
+      );
+
+      // Did NOT log deployment.failed
+      expect(logActivity).not.toHaveBeenCalled();
+
+      // Watch kept alive with fixAttempts incremented
+      expect(updatedSets[0]?.values).toMatchObject({
+        status: "watching",
+        fixAttempts: 1,
+      });
+      const updated = updatedSets[0]?.values as Record<string, unknown>;
+      const nextCheck = updated?.["nextCheckAt"] as Date;
+      expect(nextCheck instanceof Date).toBe(true);
+      expect(nextCheck.getTime() - now.getTime()).toBeCloseTo(15_000, -2);
+    });
+
+    it("on failure under cap with no assignee: skips wake, still posts comment, increments fixAttempts, keeps watching", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      const watch = makeWatch({ deadlineAt: new Date(now.getTime() + 10 * 60_000), fixAttempts: 1 });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const wakeAgent = vi.fn().mockResolvedValue(undefined);
+      const getIssueAssignee = vi.fn().mockResolvedValue(null);
+      const { deps, addComment, logActivity } = makeDeps(db, null, { wakeAgent, getIssueAssignee });
+      mockPoll.mockResolvedValue("failure");
+
+      const svc = createDeploymentWatch(deps);
+      const result = await svc.tick(now);
+
+      // Counts as a failure event
+      expect(result).toEqual({ live: 0, delayed: 0, failed: 1 });
+
+      // Did NOT wake anyone (no assignee)
+      expect(wakeAgent).not.toHaveBeenCalled();
+
+      // Posted comment regardless
+      expect(addComment).toHaveBeenCalledOnce();
+      expect(addComment).toHaveBeenCalledWith(
+        "issue-1",
+        "That change ran into a snag while publishing. I'm fixing it and trying again.",
+        {},
+        { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
+      );
+
+      // Did NOT log deployment.failed
+      expect(logActivity).not.toHaveBeenCalled();
+
+      // Still watching, fixAttempts incremented
+      expect(updatedSets[0]?.values).toMatchObject({
+        status: "watching",
+        fixAttempts: 2,
+      });
     });
 
     it("does not throw when poll throws for one watch; leaves it watching; still processes other due watches", async () => {

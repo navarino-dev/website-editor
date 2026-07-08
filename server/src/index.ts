@@ -23,6 +23,7 @@ import {
   companies,
   companyMemberships,
   instanceUserRoles,
+  issues,
 } from "@paperclipai/db";
 import detectPort from "detect-port";
 import { createApp } from "./app.js";
@@ -730,6 +731,22 @@ export async function startServer(): Promise<StartedServer> {
       projectsSvc: projectService(db as any),
       logActivity: (input) => logActivity(db as any, input),
       getToken: () => process.env.GITHUB_TOKEN,
+      getIssueAssignee: async (issueId) => {
+        const rows = await (db as any)
+          .select({ a: issues.assigneeAgentId })
+          .from(issues)
+          .where(eq(issues.id, issueId))
+          .limit(1);
+        return rows[0]?.a ?? null;
+      },
+      wakeAgent: (agentId, opts) =>
+        heartbeat.wakeup(agentId, {
+          source: "automation",
+          triggerDetail: "system",
+          requestedByActorType: "system",
+          requestedByActorId: "system",
+          ...opts,
+        }),
     });
     setDeploymentWatch(deploymentWatch);
   

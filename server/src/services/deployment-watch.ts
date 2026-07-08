@@ -44,6 +44,8 @@ export interface DeploymentWatchDeps {
   };
   logActivity: (input: LogActivityInput) => Promise<unknown>;
   getToken: () => string | undefined;
+  getIssueAssignee: (issueId: string) => Promise<string | null>;
+  wakeAgent: (agentId: string, opts: { reason: string; payload?: Record<string, unknown>; contextSnapshot?: Record<string, unknown> }) => Promise<unknown>;
 }
 
 const SYS_ACTOR: Actor = {};
@@ -116,6 +118,7 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
       productionUrl: string;
       status: string;
       attempts: number;
+      fixAttempts: number;
       startedAt: Date;
       deadlineAt: Date;
       nextCheckAt: Date;
@@ -152,19 +155,47 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
             .where(eq(deploymentWatches.id, w.id));
           live++;
         } else if (state === "failure") {
-          await post(w.issueId, FAILED_BODY, "danger");
-          await deps.logActivity({
-            companyId: w.companyId,
-            actorType: "system",
-            actorId: "system",
-            action: "deployment.failed",
-            entityType: "issue",
-            entityId: w.issueId,
-          });
-          await db
-            .update(deploymentWatches)
-            .set({ status: "failed", updatedAt: now })
-            .where(eq(deploymentWatches.id, w.id));
+          if (w.fixAttempts < 3) {
+            // Under cap: wake the assignee to fix and retry
+            const assignee = await deps.getIssueAssignee(w.issueId);
+            if (assignee) {
+              await deps.wakeAgent(assignee, {
+                reason: "deploy_failed",
+                payload: { issueId: w.issueId, fixAttempt: w.fixAttempts + 1 },
+                contextSnapshot: { issueId: w.issueId, source: "deployment.failed" },
+              });
+            }
+            await post(
+              w.issueId,
+              "That change ran into a snag while publishing. I'm fixing it and trying again.",
+              "warning",
+            );
+            await db
+              .update(deploymentWatches)
+              .set({
+                status: "watching",
+                fixAttempts: w.fixAttempts + 1,
+                nextCheckAt: new Date(now.getTime() + POLL_MS),
+                deadlineAt: new Date(now.getTime() + DEADLINE_MS),
+                updatedAt: now,
+              })
+              .where(eq(deploymentWatches.id, w.id));
+          } else {
+            // At/over cap: escalate terminally
+            await post(w.issueId, FAILED_BODY, "danger");
+            await deps.logActivity({
+              companyId: w.companyId,
+              actorType: "system",
+              actorId: "system",
+              action: "deployment.failed",
+              entityType: "issue",
+              entityId: w.issueId,
+            });
+            await db
+              .update(deploymentWatches)
+              .set({ status: "failed", updatedAt: now })
+              .where(eq(deploymentWatches.id, w.id));
+          }
           failed++;
         } else if (now >= w.deadlineAt) {
           await post(w.issueId, DELAYED_BODY, "warning");
