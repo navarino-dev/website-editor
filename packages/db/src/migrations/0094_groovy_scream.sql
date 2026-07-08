@@ -1,0 +1,1 @@
+ALTER TABLE "deployment_watches" ADD COLUMN "fix_attempts" integer DEFAULT 0 NOT NULL;

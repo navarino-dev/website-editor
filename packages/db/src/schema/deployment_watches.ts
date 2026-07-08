@@ -14,6 +14,7 @@ export const deploymentWatches = pgTable(
     // watching | live | delayed | failed
     status: text("status").notNull().default("watching"),
     attempts: integer("attempts").notNull().default(0),
+    fixAttempts: integer("fix_attempts").notNull().default(0),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
     nextCheckAt: timestamp("next_check_at", { withTimezone: true }).notNull().defaultNow(),
