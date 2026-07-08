@@ -30,6 +30,8 @@ describe("hasPendingSafetyApproval", () => {
     expect(result).toBe(false);
   });
 
+  // Note: The following two tests exercise boolean handling in the caller;
+  // the fake db cannot fully exercise the SQL WHERE filter itself.
   it("returns false when the approval exists but is not pending (e.g. approved)", async () => {
     // The SQL filter handles this, but we ensure the function treats zero rows as false.
     const db = makeFakeDb([]);
@@ -60,6 +62,7 @@ describe("hasPendingSafetyApproval", () => {
     // and the chain was consumed (where + limit were called).
     expect(db.select).toHaveBeenCalledTimes(1);
     expect(chain.where).toHaveBeenCalledTimes(1);
+    expect(chain.where.mock.calls[0][0]).toBeTruthy();
     expect(chain.limit).toHaveBeenCalledWith(1);
   });
 });

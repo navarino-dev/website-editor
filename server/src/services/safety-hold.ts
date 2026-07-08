@@ -28,6 +28,7 @@ export async function hasPendingSafetyApproval(
       and(
         eq(issueApprovals.companyId, companyId),
         eq(issueApprovals.issueId, issueId),
+        eq(approvals.companyId, companyId),
         eq(approvals.type, "safety_review_required"),
         eq(approvals.status, "pending"),
       ),
