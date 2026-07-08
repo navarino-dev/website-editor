@@ -218,6 +218,15 @@ describe("issue create gate atomicity", () => {
       // must NOT promote (svc.update must not be called at all)
       expect(mockIssueService.update).not.toHaveBeenCalled();
 
+      // evaluateAndGate must receive the INTENDED status ("todo"), not the safety-hold "backlog",
+      // so that on admin approval the gate restores priorStatus = "todo" (not "backlog").
+      expect(evaluateAndGate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          issue: expect.objectContaining({ status: "todo" }),
+        }),
+        expect.anything(),
+      );
+
       // must NOT wake the agent
       expect(mockWakeup).not.toHaveBeenCalled();
 

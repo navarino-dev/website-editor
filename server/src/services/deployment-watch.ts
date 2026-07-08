@@ -6,6 +6,7 @@ import type { LogActivityInput } from "./activity-log.js";
 import { getLatestProductionDeployStatus } from "./github-deployments.js";
 
 const POLL_MS = 15_000;
+const RETRY_POLL_MS = 3 * 60_000;
 const DEADLINE_MS = 10 * 60_000;
 
 const LIVE_BODY = (url: string) =>
@@ -44,7 +45,7 @@ export interface DeploymentWatchDeps {
   };
   logActivity: (input: LogActivityInput) => Promise<unknown>;
   getToken: () => string | undefined;
-  getIssueAssignee: (issueId: string) => Promise<string | null>;
+  getIssueAssignee: (issueId: string, companyId: string) => Promise<string | null>;
   wakeAgent: (agentId: string, opts: { reason: string; payload?: Record<string, unknown>; contextSnapshot?: Record<string, unknown> }) => Promise<unknown>;
 }
 
@@ -157,7 +158,7 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
         } else if (state === "failure") {
           if (w.fixAttempts < 3) {
             // Under cap: wake the assignee to fix and retry
-            const assignee = await deps.getIssueAssignee(w.issueId);
+            const assignee = await deps.getIssueAssignee(w.issueId, w.companyId);
             if (assignee) {
               await deps.wakeAgent(assignee, {
                 reason: "deploy_failed",
@@ -170,12 +171,22 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
               "That change ran into a snag while publishing. I'm fixing it and trying again.",
               "warning",
             );
+            await deps.logActivity({
+              companyId: w.companyId,
+              actorType: "system",
+              actorId: "system",
+              action: "deployment.retry_requested",
+              entityType: "issue",
+              entityId: w.issueId,
+              details: { fixAttempt: w.fixAttempts + 1 },
+            });
             await db
               .update(deploymentWatches)
               .set({
                 status: "watching",
                 fixAttempts: w.fixAttempts + 1,
-                nextCheckAt: new Date(now.getTime() + POLL_MS),
+                startedAt: now,
+                nextCheckAt: new Date(now.getTime() + RETRY_POLL_MS),
                 deadlineAt: new Date(now.getTime() + DEADLINE_MS),
                 updatedAt: now,
               })

@@ -731,11 +731,11 @@ export async function startServer(): Promise<StartedServer> {
       projectsSvc: projectService(db as any),
       logActivity: (input) => logActivity(db as any, input),
       getToken: () => process.env.GITHUB_TOKEN,
-      getIssueAssignee: async (issueId) => {
+      getIssueAssignee: async (issueId, companyId) => {
         const rows = await (db as any)
           .select({ a: issues.assigneeAgentId })
           .from(issues)
-          .where(eq(issues.id, issueId))
+          .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)))
           .limit(1);
         return rows[0]?.a ?? null;
       },

@@ -3597,7 +3597,7 @@ export function issueRoutes(
         const gateResult = await evaluateAndGate(
           {
             companyId,
-            issue: { id: issue.id, status: issue.status, assigneeAgentId: issue.assigneeAgentId, title: issue.title },
+            issue: { id: issue.id, status: intendedStatus, assigneeAgentId: issue.assigneeAgentId, title: issue.title },
             requestText: [issue.title, req.body.description].filter(Boolean).join("\n"),
             requesterUserId: actor.actorId,
           },

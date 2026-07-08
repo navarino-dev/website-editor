@@ -74,7 +74,14 @@ Do these steps and NOTHING ELSE:
 
 ## When Woken With Reason "deploy_failed"
 
-The production deploy for an approved change failed. Read the error from the wakeup context, fix the cause on the branch, commit, and push. The system will re-check the deploy. Keep going until it deploys successfully.
+The production deploy for an approved change failed. Production deploys come from the Reviewer merging to `main` — pushing to your branch alone does NOT create a new production deployment.
+
+1. Read the error from the wakeup context.
+2. Fix the cause on the branch, commit, and push.
+3. Reassign the issue to the Reviewer agent so they can re-merge and trigger a fresh production deploy.
+4. STOP. Do not merge. Do not mark the issue done.
+
+The deployment watcher will automatically re-check the new production deploy once the Reviewer merges.
 
 ## Rules
 

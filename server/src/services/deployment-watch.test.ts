@@ -86,7 +86,7 @@ function makeDeps(
   db: ReturnType<typeof createFakeDb>["db"],
   projectResult: { productionUrl: string | null; codebase: { repoUrl: string | null } } | null,
   options: {
-    getIssueAssignee?: (issueId: string) => Promise<string | null>;
+    getIssueAssignee?: (issueId: string, companyId: string) => Promise<string | null>;
     wakeAgent?: (agentId: string, opts: { reason: string; payload?: Record<string, unknown>; contextSnapshot?: Record<string, unknown> }) => Promise<unknown>;
   } = {},
 ) {
@@ -381,18 +381,30 @@ describe("createDeploymentWatch", () => {
         { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
       );
 
-      // Did NOT log deployment.failed
-      expect(logActivity).not.toHaveBeenCalled();
+      // Logged deployment.retry_requested (not deployment.failed)
+      expect(logActivity).toHaveBeenCalledOnce();
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId: "company-1",
+          actorType: "system",
+          action: "deployment.retry_requested",
+          entityType: "issue",
+          entityId: "issue-1",
+          details: { fixAttempt: 1 },
+        }),
+      );
 
-      // Watch kept alive with fixAttempts incremented
-      expect(updatedSets[0]?.values).toMatchObject({
+      // Watch kept alive with fixAttempts incremented; startedAt advanced so next poll only sees NEW deploys
+      const updated = updatedSets[0]?.values as Record<string, unknown>;
+      expect(updated).toMatchObject({
         status: "watching",
         fixAttempts: 1,
+        startedAt: now,
       });
-      const updated = updatedSets[0]?.values as Record<string, unknown>;
       const nextCheck = updated?.["nextCheckAt"] as Date;
       expect(nextCheck instanceof Date).toBe(true);
-      expect(nextCheck.getTime() - now.getTime()).toBeCloseTo(15_000, -2);
+      // nextCheckAt should be ~3 minutes (RETRY_POLL_MS), not 15s
+      expect(nextCheck.getTime() - now.getTime()).toBeCloseTo(3 * 60_000, -2);
     });
 
     it("on failure under cap with no assignee: skips wake, still posts comment, increments fixAttempts, keeps watching", async () => {
@@ -422,13 +434,25 @@ describe("createDeploymentWatch", () => {
         { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
       );
 
-      // Did NOT log deployment.failed
-      expect(logActivity).not.toHaveBeenCalled();
+      // Logged deployment.retry_requested (not deployment.failed)
+      expect(logActivity).toHaveBeenCalledOnce();
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId: "company-1",
+          actorType: "system",
+          action: "deployment.retry_requested",
+          entityType: "issue",
+          entityId: "issue-1",
+          details: { fixAttempt: 2 },
+        }),
+      );
 
-      // Still watching, fixAttempts incremented
-      expect(updatedSets[0]?.values).toMatchObject({
+      // Still watching, fixAttempts incremented, startedAt advanced
+      const updated = updatedSets[0]?.values as Record<string, unknown>;
+      expect(updated).toMatchObject({
         status: "watching",
         fixAttempts: 2,
+        startedAt: now,
       });
     });
 
