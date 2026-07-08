@@ -628,6 +628,11 @@ function isUnassignedReassignValue(value: string): boolean {
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Statuses where a property manager's request is still actively being worked
+// (not yet ready for their review, live, or blocked). The concierge "working"
+// animation stays up for the whole of this window.
+const PM_WORKING_STATUSES = new Set(["backlog", "todo", "in_progress"]);
+
 function commentDateLabel(date: Date | string | undefined): string {
   if (!date) return "";
   const then = new Date(date).getTime();
@@ -1351,6 +1356,7 @@ function IssueChatUserMessage({
     currentUserId,
     userProfileMap,
   } = useContext(IssueChatCtx);
+  const isSimplified = useIsSimplifiedView();
   const custom = message.metadata.custom as Record<string, unknown>;
   const anchorId = typeof custom.anchorId === "string" ? custom.anchorId : undefined;
   const commentId = typeof custom.commentId === "string" ? custom.commentId : message.id;
@@ -1381,14 +1387,16 @@ function IssueChatUserMessage({
   );
   const messageBody = (
     <div className={cn("flex min-w-0 max-w-[85%] flex-col", isCurrentUser && "items-end")}>
-      <div className={cn("mb-1 flex items-center gap-2 px-1", isCurrentUser ? "justify-end" : "justify-start")}>
-        <span className="text-sm font-medium text-foreground">{resolvedAuthorName}</span>
-        {followUpRequested ? (
-          <Badge variant="outline" className="text-[10px] uppercase tracking-[0.14em]">
-            Follow-up
-          </Badge>
-        ) : null}
-      </div>
+      {!isSimplified ? (
+        <div className={cn("mb-1 flex items-center gap-2 px-1", isCurrentUser ? "justify-end" : "justify-start")}>
+          <span className="text-sm font-medium text-foreground">{resolvedAuthorName}</span>
+          {followUpRequested ? (
+            <Badge variant="outline" className="text-[10px] uppercase tracking-[0.14em]">
+              Follow-up
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
       <div
         className={cn(
           "min-w-0 max-w-full overflow-hidden break-all rounded-2xl px-4 py-2.5",
@@ -1561,9 +1569,6 @@ function IssueChatAssistantMessage({
   const canStopRun = Boolean(runId) && (isRunActive || runStatus === "queued" || runStatus === "running");
   const chainOfThoughtLabel = typeof custom.chainOfThoughtLabel === "string" ? custom.chainOfThoughtLabel : null;
   const hasCoT = message.content.some((p) => p.type === "reasoning" || p.type === "tool-call");
-  const hasVisibleText = message.content.some(
-    (p) => p.type === "text" && p.text.trim().length > 0,
-  );
   const isFoldable = !isRunning && !!chainOfThoughtLabel;
   const [folded, setFolded] = useState(isFoldable);
   const [prevFoldKey, setPrevFoldKey] = useState({ messageId: message.id, isFoldable });
@@ -1662,15 +1667,7 @@ function IssueChatAssistantMessage({
             <>
               <div className="space-y-3">
                 {isSimplified ? (
-                  <>
-                    {isRunning && !hasVisibleText ? (
-                      <div className="flex items-center gap-2.5 px-1 py-1.5">
-                        <ThinkingDots className="pm-accent" />
-                        <span className="text-sm text-muted-foreground">Working on your change…</span>
-                      </div>
-                    ) : null}
-                    <IssueChatTextParts message={message} />
-                  </>
+                  <IssueChatTextParts message={message} />
                 ) : (
                   <>
                     <IssueChatAssistantParts message={message} hasCoT={hasCoT} />
@@ -1702,6 +1699,7 @@ function IssueChatAssistantMessage({
                 ) : null}
               </div>
 
+              {!isSimplified ? (
               <div className="mt-2 flex items-center gap-1">
                 <button
                   type="button"
@@ -1790,6 +1788,7 @@ function IssueChatAssistantMessage({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -4365,6 +4364,12 @@ export function IssueChatThread({
   }
   const errorBoundaryResetKey = String(errorBoundaryResetVersionRef.current);
 
+  const showWorkingIndicator =
+    threadIsSimplified &&
+    showComposer &&
+    !!issueStatus &&
+    PM_WORKING_STATUSES.has(issueStatus);
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <IssueChatCtx.Provider value={chatCtx}>
@@ -4390,7 +4395,7 @@ export function IssueChatThread({
           <div data-testid="thread-root">
             <div
               data-testid="thread-viewport"
-              className={variant === "embedded" ? "space-y-3" : "space-y-4"}
+              className={variant === "embedded" ? "space-y-3" : threadIsSimplified ? "space-y-6" : "space-y-4"}
             >
               {messages.length === 0 ? (
                 <div className={cn(
@@ -4490,6 +4495,12 @@ export function IssueChatThread({
                 </div>
               ) : null}
               {footer ? <div data-testid="issue-chat-thread-footer">{footer}</div> : null}
+              {showWorkingIndicator ? (
+                <div className="flex items-center gap-2.5 px-1 py-2" data-testid="pm-working-indicator">
+                  <ThinkingDots className="pm-accent" />
+                  <span className="text-sm text-muted-foreground">Working on your change…</span>
+                </div>
+              ) : null}
               <div ref={bottomAnchorRef} />
               {showComposer ? (
                 <div
