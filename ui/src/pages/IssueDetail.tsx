@@ -3374,6 +3374,19 @@ export function IssueDetail() {
       )}
 
       <div className="space-y-3">
+        {isSimplified ? (
+          <div className="flex flex-wrap items-center gap-2.5">
+            {(resolvedProject?.name ?? issue.project?.name) ? (
+              <span className="pm-accent text-[12px] font-semibold uppercase tracking-[0.14em]">
+                {resolvedProject?.name ?? issue.project?.name}
+              </span>
+            ) : null}
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${friendlyStatusMeta(issue.status).pill}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${friendlyStatusMeta(issue.status).dot}`} />
+              {friendlyStatusMeta(issue.status).label}
+            </span>
+          </div>
+        ) : (
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           {isSimplified ? (
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${friendlyStatusMeta(issue.status).pill}`}>
@@ -3665,6 +3678,7 @@ export function IssueDetail() {
             </Popover>
           </div>
         </div>
+        )}
 
         <InlineEditor
           value={issue.title}

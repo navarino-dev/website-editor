@@ -187,6 +187,14 @@
   --sidebar-border: oklch(0.922 0.006 248);
   --sidebar-ring: oklch(0.36 0.078 253);
 
+  /* Soft, calm corners. The admin board is intentionally sharp (radius 0);
+     the concierge view rounds every primitive for a gentler, ChatGPT-like feel. */
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+
   font-family: var(--font-pm-sans);
   letter-spacing: -0.011em;
   background-color: var(--background);
