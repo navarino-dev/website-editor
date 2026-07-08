@@ -3523,6 +3523,10 @@ export function issueRoutes(
     await assertIssueEnvironmentSelection(companyId, req.body.executionWorkspaceSettings?.environmentId);
 
     const actor = getActorInfo(req);
+    // Hold user-submitted change requests in a non-assignable state until the
+    // safety gate decides, so no agent can be dispatched during scoring.
+    const intendedStatus = typeof req.body.status === "string" ? req.body.status : "todo";
+    const holdForSafety = actor.actorType === "user";
     const executionPolicy = applyActorMonitorScheduledBy(
       normalizeIssueExecutionPolicy(req.body.executionPolicy),
       actor.actorType,
@@ -3530,6 +3534,7 @@ export function issueRoutes(
     assertCanManageIssueMonitor(req, req.body.assigneeAgentId ?? null, Boolean(executionPolicy?.monitor));
     const issue = await svc.create(companyId, {
       ...req.body,
+      status: holdForSafety ? "backlog" : req.body.status,
       executionPolicy,
       createdByAgentId: actor.agentId,
       createdByUserId: actor.actorType === "user" ? actor.actorId : null,
@@ -3553,7 +3558,7 @@ export function issueRoutes(
       details: {
         title: issue.title,
         identifier: issue.identifier,
-        ...buildCreateIssueActivityStatusDetails(issue, res),
+        ...buildCreateIssueActivityStatusDetails({ ...issue, status: intendedStatus }, res),
         ...(Array.isArray(req.body.blockedByIssueIds) ? { blockedByIssueIds: req.body.blockedByIssueIds } : {}),
         ...summarizeIssueReferenceActivityDetails({
           addedReferencedIssues: referenceDiff.addedReferencedIssues.map(summarizeIssueRelationForActivity),
@@ -3620,10 +3625,15 @@ export function issueRoutes(
       }
     }
 
+    let finalIssue = issue;
     if (!safetyGated) {
+      // Cleared (or agent-authored): promote out of the safety hold, then wake.
+      if (holdForSafety && issue.status === "backlog" && intendedStatus !== "backlog") {
+        finalIssue = (await svc.update(issue.id, { status: intendedStatus })) ?? { ...issue, status: intendedStatus };
+      }
       void queueIssueAssignmentWakeup({
         heartbeat,
-        issue,
+        issue: finalIssue,
         reason: "issue_assigned",
         mutation: "create",
         contextSource: "issue.create",
@@ -3631,9 +3641,10 @@ export function issueRoutes(
         requestedByActorId: actor.actorId,
       });
     }
+    // gated: the gate already set status "blocked" + created the approval; do not promote or wake.
 
     res.status(201).json({
-      ...issue,
+      ...finalIssue,
       relatedWork: referenceSummary,
       referencedIssueIdentifiers: referenceSummary.outbound.map((item) => item.issue.identifier ?? item.issue.id),
     });

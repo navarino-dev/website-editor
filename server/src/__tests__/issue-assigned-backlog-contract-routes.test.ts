@@ -8,6 +8,7 @@ const mockWakeup = vi.hoisted(() => vi.fn(async () => undefined));
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockIssueService = vi.hoisted(() => ({
   create: vi.fn(),
+  update: vi.fn(),
   createChild: vi.fn(),
   getById: vi.fn(),
   getByIdentifier: vi.fn(async () => null),
@@ -176,6 +177,13 @@ describe("assigned backlog creation contract", () => {
         status: String(data.status),
         assigneeAgentId: data.assigneeAgentId as string | null | undefined,
       }));
+    mockIssueService.update.mockImplementation(async (_id: string, data: Record<string, unknown>) =>
+      makeIssue({
+        id: "issue-1",
+        title: "issue-1",
+        status: String(data.status ?? "todo"),
+        assigneeAgentId: data.assigneeAgentId as string | null | undefined ?? assigneeAgentId,
+      }));
     mockIssueService.createChild.mockImplementation(async (_parentId: string, data: Record<string, unknown>) => ({
       issue: makeIssue({
         id: "child-1",
@@ -206,13 +214,18 @@ describe("assigned backlog creation contract", () => {
       return;
     }
 
+    // Issue is held in backlog during safety scoring, then promoted to the intended status.
     expect(mockIssueService.create).toHaveBeenCalledWith(
       "company-1",
       expect.objectContaining({
         title: "Assigned executable work",
         assigneeAgentId,
-        status: "todo",
+        status: "backlog",
       }),
+    );
+    expect(mockIssueService.update).toHaveBeenCalledWith(
+      "issue-1",
+      expect.objectContaining({ status: "todo" }),
     );
     expect(res.body).toEqual(expect.objectContaining({
       assigneeAgentId,
