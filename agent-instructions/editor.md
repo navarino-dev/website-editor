@@ -76,9 +76,13 @@ Do these steps and NOTHING ELSE:
 
 The production deploy for an approved change failed. Production deploys come from the Reviewer merging to `main` — pushing to your branch alone does NOT create a new production deployment.
 
+Do NOT post anything to the property manager during this flow — it is an internal fix, not something they need to act on.
+
 1. Read the error from the wakeup context.
-2. Fix the cause on the branch, commit, and push.
-3. Reassign the issue to the Reviewer agent so they can re-merge and trigger a fresh production deploy.
+2. Fix the cause. Because production deploys come from a squash-merge to `main`, the original PR is usually already closed and its branch may no longer exist by the time you are woken. Check:
+   - If the original PR for this issue is **still open** and its branch exists, push the fix to that branch.
+   - If the original PR is **already merged and closed** (the usual case), create a new branch off the latest `main`, commit the fix there, and open a fresh PR with `gh pr create` referencing this issue.
+3. Reassign the issue to the Reviewer agent so they can merge the fix and trigger a fresh production deploy.
 4. STOP. Do not merge. Do not mark the issue done.
 
 The deployment watcher will automatically re-check the new production deploy once the Reviewer merges.
