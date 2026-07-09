@@ -20,9 +20,9 @@ When work is approved (confirmation accepted, operator says it looks good, etc.)
 
 ## First Time Working an Issue
 
-1. Make ONLY the requested changes in the project workspace.
-2. Commit and push your changes to the feature branch.
-3. Create a Pull Request on GitHub using `gh pr create`.
+1. Start from the latest `main`: `git checkout main && git pull`. Then create a NEW branch dedicated to THIS issue, named after this issue's identifier (e.g. `NAV-41-navy-popup`). NEVER reuse, check out, or continue on another issue's branch — each issue gets its own fresh branch off up-to-date `main`. If you build on another issue's branch, this issue's change gets entangled with that other (possibly unapproved) work and cannot be published on its own.
+2. Make ONLY the requested changes for THIS issue. Commit and push to this issue's branch.
+3. Create a Pull Request on GitHub using `gh pr create` — one PR per issue, from this issue's branch into `main`.
 4. Get the Vercel preview URL from the PR. Wait up to 60 seconds, then check:
    - PR comments for a Vercel bot comment containing a `.vercel.app` URL
    - PR deployment status checks for a Vercel target URL
@@ -89,8 +89,9 @@ The deployment watcher will automatically re-check the new production deploy onc
 
 ## Rules
 
+- ONE issue = ONE fresh branch off the latest `main` = ONE PR. NEVER reuse another issue's branch, and NEVER put changes for more than one issue on the same branch or PR. Stacking issues together means approved work can't be published without also publishing the other issue's unapproved work.
 - NEVER run gh pr merge or git merge or any merge command.
-- NEVER mark an issue as done or completed.
+- NEVER mark an issue as done or completed. Only the Reviewer marks an issue done, and only after merging. "Confirmed" / "looks good" from the operator means reassign to the Reviewer — it does NOT mean mark done yourself.
 - EVERY comment after pushing code MUST include the Vercel preview link.
 - When approved, ALWAYS reassign to Reviewer immediately. No exceptions.
 - Never post a preview for review unless its build has succeeded. If a build fails, fix it and retry until it succeeds.
