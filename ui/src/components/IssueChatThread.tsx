@@ -666,7 +666,7 @@ function ThinkingDots({ className }: { className?: string }) {
 }
 
 const IssueChatTextPart = memo(function IssueChatTextPart({ text, recessed }: { text: string; recessed?: boolean }) {
-  const { onImageClick } = useContext(IssueChatCtx);
+  const { onImageClick, issueStatus } = useContext(IssueChatCtx);
   const isSimplified = useIsSimplifiedView();
   if (isSuccessfulRunHandoffComment(text)) {
     return <SuccessfulRunHandoffCommentCallout text={text} recessed={recessed} onImageClick={onImageClick} />;
@@ -688,7 +688,11 @@ const IssueChatTextPart = memo(function IssueChatTextPart({ text, recessed }: { 
 
   // Simplified (PM) view: apply dejargon and show preview card when available.
   const display = dejargonComment(text);
-  const previewUrl = extractPreviewUrl(text);
+  // Only offer the "View your preview" card while the change is still awaiting
+  // the manager's review. Once it's approved/published (done) or cancelled, a
+  // preview link is stale and would duplicate cards on later status comments.
+  const previewUrl =
+    issueStatus === "done" || issueStatus === "cancelled" ? null : extractPreviewUrl(text);
 
   // If the comment is pure noise AND has no card to show, render nothing.
   if (display.hidden && !previewUrl) {

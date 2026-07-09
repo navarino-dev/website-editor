@@ -1308,6 +1308,10 @@ export function IssueDetail() {
         ...(pageParam ? { after: pageParam } : {}),
       }),
     enabled: !!issueId,
+    // Property managers won't know to refresh: keep the conversation live so the
+    // publishing / "now live" updates arrive on their own. (Publish continues
+    // after the issue is marked done, so we keep polling until it's cancelled.)
+    refetchInterval: isSimplified && !!issue?.status && issue.status !== "cancelled" ? 5000 : false,
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) =>
       getNextIssueCommentPageParam(lastPage, ISSUE_COMMENT_PAGE_SIZE),
@@ -2986,12 +2990,20 @@ export function IssueDetail() {
   const handleInterruptQueuedRun = useCallback(async (runId: string) => {
     await interruptQueuedComment.mutateAsync(runId);
   }, [interruptQueuedComment]);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishStartedAt, setPublishStartedAt] = useState(0);
   const handleAcceptInteraction = useCallback(async (
     interaction: ActionableIssueThreadInteraction,
     selectedClientKeys?: string[],
   ) => {
+    // Approving in the PM view = go live. Show the publishing progress whichever
+    // way they approve — the confirmation card here, or the sticky bar below.
+    if (isSimplified && interaction.kind === "request_confirmation") {
+      setPublishStartedAt(Date.now());
+      setPublishOpen(true);
+    }
     await acceptInteraction.mutateAsync({ interaction, selectedClientKeys });
-  }, [acceptInteraction]);
+  }, [acceptInteraction, isSimplified]);
   const handleRejectInteraction = useCallback(async (interaction: ActionableIssueThreadInteraction, reason?: string) => {
     await rejectInteraction.mutateAsync({ interaction, reason });
   }, [rejectInteraction]);
@@ -3016,8 +3028,6 @@ export function IssueDetail() {
       ) ?? null,
     [interactions],
   );
-  const [publishOpen, setPublishOpen] = useState(false);
-  const [publishStartedAt, setPublishStartedAt] = useState(0);
   const handleApproveAndGoLive = useCallback(async () => {
     if (!issue) return;
     // Show the publishing progress right away — it tracks the change through to a

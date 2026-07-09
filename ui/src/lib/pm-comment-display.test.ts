@@ -37,6 +37,19 @@ describe("dejargonComment", () => {
     expect(dejargonComment(input).hidden).toBe(true);
   });
 
+  it("hides post-merge engineering narration that used to leak to managers", () => {
+    expect(
+      dejargonComment(
+        "Design confirmed and merged to main. Warm cream editorial popup is live on main. " +
+          "PR merged with squash, branch deleted. Preview was at https://x.vercel.app",
+      ).hidden,
+    ).toBe(true);
+    expect(dejargonComment("Let me fetch the latest comment to see the feedback.").hidden).toBe(true);
+    expect(
+      dejargonComment("The confirmation was accepted — let me merge the PR and close the issue.").hidden,
+    ).toBe(true);
+  });
+
   // I1: "pending confirmation" is a natural phrase, not a machine marker.
   it("does not hide a friendly message containing 'pending confirmation'", () => {
     const input =
