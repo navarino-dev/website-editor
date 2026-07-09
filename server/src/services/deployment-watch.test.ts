@@ -277,18 +277,21 @@ describe("createDeploymentWatch", () => {
       expect(createApproval).not.toHaveBeenCalled();
     });
 
-    it("posts the delayed comment and sets status=delayed when past deadline with pending state and no prior fix attempts", async () => {
+    it("when past deadline with pending state and no prior fix attempts: posts DELAYED_BODY, schedules a retry (status=watching), and increments fixAttempts", async () => {
       const now = new Date("2026-06-29T12:00:00Z");
-      // deadlineAt is in the past relative to now, fixAttempts=0 (never failed before)
+      // deadlineAt is in the past relative to now, fixAttempts=0 (no deploy ever appeared)
       const watch = makeWatch({ deadlineAt: new Date(now.getTime() - 1), fixAttempts: 0 });
       const { db, updatedSets } = createFakeDb([[watch]]);
-      const { deps, addComment, createApproval } = makeDeps(db, null);
+      const { deps, addComment, createApproval, logActivity, wakeAgent } = makeDeps(db, null);
       mockPoll.mockResolvedValue("pending");
 
       const svc = createDeploymentWatch(deps);
       const result = await svc.tick(now);
 
+      // delayed counter still incremented (return shape unchanged)
       expect(result).toEqual({ live: 0, delayed: 1, failed: 0 });
+
+      // DELAYED_BODY still posted to keep the PM informed
       expect(addComment).toHaveBeenCalledOnce();
       expect(addComment).toHaveBeenCalledWith(
         "issue-1",
@@ -296,8 +299,28 @@ describe("createDeploymentWatch", () => {
         {},
         { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
       );
-      expect(updatedSets[0]?.values).toMatchObject({ status: "delayed" });
+
+      // No escalation (only one chance used)
       expect(createApproval).not.toHaveBeenCalled();
+
+      // No assignee in default makeDeps, so wakeAgent not called
+      expect(wakeAgent).not.toHaveBeenCalled();
+
+      // Activity logged as retry_requested (not terminal)
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "deployment.retry_requested",
+          details: { fixAttempt: 1, reason: "no_production_deploy" },
+        }),
+      );
+
+      // Watch rescheduled (NOT terminal "delayed")
+      const updated = updatedSets[0]?.values as Record<string, unknown>;
+      expect(updated).toMatchObject({ status: "watching", fixAttempts: 1, startedAt: now });
+      // deadlineAt extended to 30-min fix budget
+      const newDeadline = updated?.["deadlineAt"] as Date;
+      expect(newDeadline instanceof Date).toBe(true);
+      expect(newDeadline.getTime() - now.getTime()).toBeCloseTo(30 * 60_000, -2);
     });
 
     it("escalates on deadline exceeded when there were prior fix attempts", async () => {
@@ -348,6 +371,113 @@ describe("createDeploymentWatch", () => {
         expect.objectContaining({ action: "deployment.failed", entityId: "issue-1" }),
       );
       // Watch marked failed
+      expect(updatedSets[0]?.values).toMatchObject({ status: "failed" });
+    });
+
+    it("no-deploy past deadline with fixAttempts:0 and assignee: wakes agent with deploy_failed, posts DELAYED_BODY, sets watch to watching with 30-min budget", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      const watch = makeWatch({ deadlineAt: new Date(now.getTime() - 1), fixAttempts: 0 });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const wakeAgent = vi.fn().mockResolvedValue(undefined);
+      const getIssueAssignee = vi.fn().mockResolvedValue("agentA");
+      const { deps, addComment, createApproval, logActivity } = makeDeps(db, null, { wakeAgent, getIssueAssignee });
+      mockPoll.mockResolvedValue("pending");
+
+      const svc = createDeploymentWatch(deps);
+      const result = await svc.tick(now);
+
+      // delayed counter still incremented (return shape unchanged)
+      expect(result).toEqual({ live: 0, delayed: 1, failed: 0 });
+
+      // Woke assignee with deploy_failed reason (NOT left terminal)
+      expect(wakeAgent).toHaveBeenCalledOnce();
+      expect(wakeAgent).toHaveBeenCalledWith("agentA", {
+        reason: "deploy_failed",
+        payload: { issueId: "issue-1", fixAttempt: 1 },
+        contextSnapshot: { issueId: "issue-1", source: "deployment.delayed" },
+      });
+
+      // DELAYED_BODY posted via retryFix
+      expect(addComment).toHaveBeenCalledOnce();
+      expect(addComment).toHaveBeenCalledWith(
+        "issue-1",
+        DELAYED_BODY,
+        {},
+        { authorType: "system", presentation: { kind: "system_notice", tone: "warning", detailsDefaultOpen: false } },
+      );
+
+      // No escalation
+      expect(createApproval).not.toHaveBeenCalled();
+
+      // Activity logged as retry_requested with no_production_deploy reason
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "deployment.retry_requested",
+          details: { fixAttempt: 1, reason: "no_production_deploy" },
+        }),
+      );
+
+      // Watch rescheduled to watching with 30-min fix budget
+      const updated = updatedSets[0]?.values as Record<string, unknown>;
+      expect(updated).toMatchObject({ status: "watching", fixAttempts: 1, startedAt: now });
+      const newDeadline = updated?.["deadlineAt"] as Date;
+      expect(newDeadline instanceof Date).toBe(true);
+      expect(newDeadline.getTime() - now.getTime()).toBeCloseTo(30 * 60_000, -2);
+    });
+
+    it("no-deploy past deadline with fixAttempts:1: escalates to admin alert, blocks issue, marks watch failed", async () => {
+      const now = new Date("2026-06-29T12:00:00Z");
+      // fixAttempts=1 means the retry window also expired with no deploy
+      const watch = makeWatch({ deadlineAt: new Date(now.getTime() - 1), fixAttempts: 1 });
+      const { db, updatedSets } = createFakeDb([[watch]]);
+      const { deps, addComment, createApproval, linkManyForApproval, updateIssue, wakeAgent, logActivity } = makeDeps(db, null);
+      mockPoll.mockResolvedValue("pending");
+
+      const svc = createDeploymentWatch(deps);
+      const result = await svc.tick(now);
+
+      expect(result).toEqual({ live: 0, delayed: 0, failed: 1 });
+
+      // No wake — escalation path, not retry
+      expect(wakeAgent).not.toHaveBeenCalled();
+
+      // Approval created
+      expect(createApproval).toHaveBeenCalledWith(
+        "company-1",
+        expect.objectContaining({ type: "deploy_failed_review" }),
+      );
+      const approvalData = createApproval.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(approvalData).toMatchObject({
+        type: "deploy_failed_review",
+        requestedByAgentId: null,
+        requestedByUserId: null,
+        status: "pending",
+      });
+      expect((approvalData["payload"] as Record<string, unknown>)).toMatchObject({
+        issueId: "issue-1",
+        propertyName: "Test Property",
+        reason: "the deploy never came back",
+        attempts: 1,
+      });
+
+      // Issues linked, issue blocked
+      expect(linkManyForApproval).toHaveBeenCalledWith("approval-1", ["issue-1"]);
+      expect(updateIssue).toHaveBeenCalledWith("issue-1", { status: "blocked" });
+
+      // Terminal FAILED_BODY posted
+      expect(addComment).toHaveBeenCalledWith(
+        "issue-1",
+        FAILED_BODY,
+        {},
+        { authorType: "system", presentation: { kind: "system_notice", tone: "danger", detailsDefaultOpen: false } },
+      );
+
+      // Activity logged as deployment.failed
+      expect(logActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "deployment.failed", entityId: "issue-1" }),
+      );
+
+      // Watch marked terminal
       expect(updatedSets[0]?.values).toMatchObject({ status: "failed" });
     });
 
@@ -463,7 +593,7 @@ describe("createDeploymentWatch", () => {
 
       // Logged retry_requested
       expect(logActivity).toHaveBeenCalledWith(
-        expect.objectContaining({ action: "deployment.retry_requested", details: { fixAttempt: 1 } }),
+        expect.objectContaining({ action: "deployment.retry_requested", details: { fixAttempt: 1, reason: "build_failed" } }),
       );
 
       // Watch updated: fixAttempts incremented, startedAt advanced, deadlineAt set to 30 min budget, nextCheckAt set to RETRY_POLL_MS
@@ -507,7 +637,7 @@ describe("createDeploymentWatch", () => {
 
       // Logged retry
       expect(logActivity).toHaveBeenCalledWith(
-        expect.objectContaining({ action: "deployment.retry_requested", details: { fixAttempt: 3 } }),
+        expect.objectContaining({ action: "deployment.retry_requested", details: { fixAttempt: 3, reason: "build_failed" } }),
       );
 
       // Watch updated: fixAttempts 2→3, deadlineAt UNCHANGED (not refreshed)
@@ -581,7 +711,7 @@ describe("createDeploymentWatch", () => {
           action: "deployment.retry_requested",
           entityType: "issue",
           entityId: "issue-1",
-          details: { fixAttempt: 1 },
+          details: { fixAttempt: 1, reason: "build_failed" },
         }),
       );
 
@@ -638,7 +768,7 @@ describe("createDeploymentWatch", () => {
           action: "deployment.retry_requested",
           entityType: "issue",
           entityId: "issue-1",
-          details: { fixAttempt: 2 },
+          details: { fixAttempt: 2, reason: "build_failed" },
         }),
       );
 

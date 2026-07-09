@@ -192,6 +192,34 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
       });
     }
 
+    async function retryFix(
+      w: { id: string; companyId: string; issueId: string; fixAttempts: number; deadlineAt: Date },
+      opts: { reason: string; message: string; source: string },
+    ) {
+      const assignee = await deps.getIssueAssignee(w.issueId, w.companyId);
+      if (assignee) {
+        await deps.wakeAgent(assignee, {
+          reason: "deploy_failed",
+          payload: { issueId: w.issueId, fixAttempt: w.fixAttempts + 1 },
+          contextSnapshot: { issueId: w.issueId, source: opts.source },
+        });
+      }
+      await post(w.issueId, opts.message, "warning");
+      await deps.logActivity({
+        companyId: w.companyId, actorType: "system", actorId: "system",
+        action: "deployment.retry_requested", entityType: "issue", entityId: w.issueId,
+        details: { fixAttempt: w.fixAttempts + 1, reason: opts.reason },
+      });
+      await db.update(deploymentWatches).set({
+        status: "watching",
+        fixAttempts: w.fixAttempts + 1,
+        startedAt: now,
+        nextCheckAt: new Date(now.getTime() + RETRY_POLL_MS),
+        deadlineAt: w.fixAttempts === 0 ? new Date(now.getTime() + FIX_BUDGET_MS) : w.deadlineAt,
+        updatedAt: now,
+      }).where(eq(deploymentWatches.id, w.id));
+    }
+
     for (const w of due) {
       try {
         const state = token
@@ -215,41 +243,7 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
           if (overBudget || overCap) {
             await escalate(w, "the deploy kept failing");
           } else {
-            const assignee = await deps.getIssueAssignee(w.issueId, w.companyId);
-            if (assignee) {
-              await deps.wakeAgent(assignee, {
-                reason: "deploy_failed",
-                payload: { issueId: w.issueId, fixAttempt: w.fixAttempts + 1 },
-                contextSnapshot: { issueId: w.issueId, source: "deployment.failed" },
-              });
-            }
-            await post(
-              w.issueId,
-              "That change ran into a snag while publishing. I'm fixing it and trying again.",
-              "warning",
-            );
-            await deps.logActivity({
-              companyId: w.companyId,
-              actorType: "system",
-              actorId: "system",
-              action: "deployment.retry_requested",
-              entityType: "issue",
-              entityId: w.issueId,
-              details: { fixAttempt: w.fixAttempts + 1 },
-            });
-            await db
-              .update(deploymentWatches)
-              .set({
-                status: "watching",
-                fixAttempts: w.fixAttempts + 1,
-                startedAt: now,
-                nextCheckAt: new Date(now.getTime() + RETRY_POLL_MS),
-                deadlineAt: w.fixAttempts === 0
-                  ? new Date(now.getTime() + FIX_BUDGET_MS)
-                  : w.deadlineAt,
-                updatedAt: now,
-              })
-              .where(eq(deploymentWatches.id, w.id));
+            await retryFix(w, { reason: "build_failed", message: "That change ran into a snag while publishing. I'm fixing it and trying again.", source: "deployment.failed" });
           }
           failed++;
         } else if (now >= w.deadlineAt) {
@@ -257,11 +251,7 @@ export function createDeploymentWatch(deps: DeploymentWatchDeps) {
             await escalate(w, "the deploy never came back");
             failed++;
           } else {
-            await post(w.issueId, DELAYED_BODY, "warning");
-            await db
-              .update(deploymentWatches)
-              .set({ status: "delayed", updatedAt: now })
-              .where(eq(deploymentWatches.id, w.id));
+            await retryFix(w, { reason: "no_production_deploy", message: DELAYED_BODY, source: "deployment.delayed" });
             delayed++;
           }
         } else {
