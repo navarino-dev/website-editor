@@ -66,6 +66,7 @@ import { relativeTime, cn, formatDurationMs, formatTokens, visibleRunCostUsd } f
 import { ApprovalCard } from "../components/ApprovalCard";
 import { InlineEditor } from "../components/InlineEditor";
 import { IssueChatThread, type IssueChatComposerHandle } from "../components/IssueChatThread";
+import { PublishingProgressDialog } from "../components/PublishingProgressDialog";
 import { IssueContinuationHandoff } from "../components/IssueContinuationHandoff";
 import { IssueDocumentsSection } from "../components/IssueDocumentsSection";
 import { IssueSiblingNavigation } from "../components/IssueSiblingNavigation";
@@ -3015,8 +3016,14 @@ export function IssueDetail() {
       ) ?? null,
     [interactions],
   );
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishStartedAt, setPublishStartedAt] = useState(0);
   const handleApproveAndGoLive = useCallback(async () => {
     if (!issue) return;
+    // Show the publishing progress right away — it tracks the change through to a
+    // real production deploy and only marks "live" once it actually is.
+    setPublishStartedAt(Date.now());
+    setPublishOpen(true);
     // The friendly bar is the single confirmation in the simplified view: if the
     // agent is waiting on a confirmation request, approving resolves it (which
     // wakes the agent to proceed) rather than leaving a second pending prompt.
@@ -4079,6 +4086,15 @@ export function IssueDetail() {
               </button>
             </div>
           )}
+          {isSimplified && issue ? (
+            <PublishingProgressDialog
+              open={publishOpen}
+              onOpenChange={setPublishOpen}
+              issueId={issue.id}
+              sinceMs={publishStartedAt}
+              fallbackUrl={resolvedProject?.productionUrl ?? null}
+            />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="activity">

@@ -270,11 +270,24 @@
   40% { transform: translateY(-0.22rem); opacity: 0.95; }
 }
 
+/* Moving sheen over an in-progress publish bar. */
+.pm-progress-active {
+  background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: pm-progress-sheen 1.5s ease-in-out infinite;
+}
+@keyframes pm-progress-sheen {
+  from { background-position: 130% 0; }
+  to { background-position: -130% 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pm-rise,
   .pm-pop,
   .pm-chip-in,
-  .thinking-dots > span {
+  .thinking-dots > span,
+  .pm-progress-active {
     animation: none;
   }
 }
