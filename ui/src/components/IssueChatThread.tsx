@@ -2531,6 +2531,7 @@ function IssueChatSystemMessage({ message }: { message: ThreadMessage }) {
     onSubmitInteractionAnswers,
     onCancelInteraction,
   } = useContext(IssueChatCtx);
+  const isSimplified = useIsSimplifiedView();
   const custom = message.metadata.custom as Record<string, unknown>;
   const anchorId = typeof custom.anchorId === "string" ? custom.anchorId : undefined;
   const runId = typeof custom.runId === "string" ? custom.runId : null;
@@ -2555,6 +2556,13 @@ function IssueChatSystemMessage({ message }: { message: ThreadMessage }) {
     : null;
 
   if (custom.kind === "system_notice") {
+    // Safety-score cards are internal governance — never surface them to the
+    // property manager (they just see the friendly issue status instead).
+    const presentationTitle =
+      (custom.presentation as { title?: string | null } | null | undefined)?.title ?? "";
+    if (isSimplified && /^safety\b/i.test(presentationTitle.trim())) {
+      return null;
+    }
     return (
       <SystemNoticeCommentRow
         message={message}
