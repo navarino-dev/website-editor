@@ -25,7 +25,7 @@ export type RawScorerCall = (input: ScoreInput) => Promise<{
 }>;
 
 const FAIL_CLOSED: SafetyScore = {
-  score: 6,
+  score: 7,
   isChangeRequest: true,
   reasoning: "Automatic assessment unavailable — routed for admin review.",
   factors: [],
@@ -48,13 +48,14 @@ const SAFETY_SCORE_SCHEMA = {
 } as const;
 
 const SYSTEM_PROMPT = [
-  "You rate website change requests submitted by property managers for risk and complexity.",
+  "You rate website change requests from property managers for how complex or risky they are to carry out.",
+  "These are STATIC marketing websites: all content — including pricing, availability, and unit or floor-plan listings — lives in the site's own code. There is NO live customer database, payment system, or booking engine behind them, so editing that content is a simple, low-risk content change.",
   "Return a score from 0 to 10:",
-  "- 0–3: simple copy, image, or styling tweaks on existing pages.",
-  "- 4–5: moderate multi-element changes that are still front-end only.",
-  "- 6–10: massive overhauls, complex or multi-page restructures, anything that touches a backend / server / database / API, or anything that touches repository, CI, deploy, or project settings.",
-  "Push the score ABOVE 5 for any of: massive overhaul, complex change, touching a backend, or touching repo/CI/deploy/settings.",
-  'Also set isChangeRequest=false when the message is not a change request — e.g. approvals or acknowledgements ("looks good", "go live", "approved") or questions. In that case score 0 and leave factors empty.',
+  "- 0–3 (the DEFAULT for almost every request): routine content edits — wording/copy, pricing, availability, unit/floor-plan listings, images, colors, styling, contact info, hours, promotions, adding or removing a section.",
+  "- 4–6: larger but ordinary front-end work — building a new page, a multi-section redesign, or reworking navigation.",
+  "- 7–10 (RARE — only genuinely complex or dangerous work): overhauling the whole site or its architecture; changing build, deploy, hosting, or repository configuration; adding real logic that handles logins, user data, or payments; deleting large amounts of content wholesale; or a request so vague or self-contradictory that carrying it out could badly break the site.",
+  "Do NOT raise the score just because a request mentions 'pricing', 'availability', 'units', 'inventory', or 'database' — on these sites those are ordinary content edits. Only genuinely complex or destructive work belongs at 7 or above.",
+  'Set isChangeRequest=false when the message is not a change request — e.g. approvals or acknowledgements ("looks good", "go live", "approved", "proceed", "yes") or questions. In that case score 0 and leave factors empty.',
   "Be concise. Output only the structured fields.",
 ].join("\n");
 

@@ -45,24 +45,28 @@ export async function evaluateAndGate(
   // Acknowledgements / approvals / questions: never gated, no card.
   if (!score.isChangeRequest) return { gated: false, score };
 
-  const gated = score.degraded === true || score.score > 5;
+  // Only genuinely complex or dangerous work (7+) needs admin review. Routine
+  // content edits — copy, pricing, availability, unit listings, images — proceed.
+  const gated = score.degraded === true || score.score >= 7;
+
+  // Only surface the "Safety X/10" card when the change actually gates. Cleared
+  // changes proceed silently, so the property-manager thread stays uncluttered.
+  if (!gated) return { gated: false, score };
 
   await deps.issuesSvc.addComment(
     input.issue.id,
-    cardBody(score, gated),
+    cardBody(score, true),
     {},
     {
       authorType: "system",
       presentation: {
         kind: "system_notice",
-        tone: gated ? "warning" : "success",
+        tone: "warning",
         title: `Safety ${score.score}/10`,
-        detailsDefaultOpen: gated,
+        detailsDefaultOpen: true,
       },
     },
   );
-
-  if (!gated) return { gated: false, score };
 
   // Create + link the approval BEFORE blocking the issue, so a failure here can
   // never leave the issue blocked with no approval to release it.

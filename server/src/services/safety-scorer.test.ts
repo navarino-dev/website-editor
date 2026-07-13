@@ -33,7 +33,7 @@ describe("scoreChangeRequest", () => {
       throw new Error("timeout");
     });
     expect(r).toEqual({
-      score: 6,
+      score: 7,
       isChangeRequest: true,
       reasoning: "Automatic assessment unavailable — routed for admin review.",
       factors: [],
@@ -44,6 +44,6 @@ describe("scoreChangeRequest", () => {
   it("fails closed when the score is not a number", async () => {
     const r = await scoreChangeRequest({ text: "x" }, ok({ score: "high", isChangeRequest: true, reasoning: "r", factors: [] }));
     expect(r.degraded).toBe(true);
-    expect(r.score).toBe(6);
+    expect(r.score).toBe(7);
   });
 });

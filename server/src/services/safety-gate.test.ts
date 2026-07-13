@@ -23,13 +23,21 @@ const input: GateInput = {
 const scorerReturning = (score: SafetyScore) => async () => score;
 
 describe("evaluateAndGate", () => {
-  it("clears a low-risk change: posts a card, does not gate, no approval", async () => {
+  it("clears a low-risk change: no card, does not gate, no approval", async () => {
     const deps = makeDeps(scorerReturning({ score: 3, isChangeRequest: true, reasoning: "ok", factors: [] }));
     const out = await evaluateAndGate(input, deps);
     expect(out.gated).toBe(false);
-    expect(vi.mocked(deps.issuesSvc.addComment)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(deps.issuesSvc.addComment)).not.toHaveBeenCalled();
     expect(vi.mocked(deps.approvalsSvc.create)).not.toHaveBeenCalled();
     expect(vi.mocked(deps.issuesSvc.update)).not.toHaveBeenCalled();
+  });
+
+  it("does not gate an ordinary front-end change scored 6 — only 7+ gates", async () => {
+    const deps = makeDeps(scorerReturning({ score: 6, isChangeRequest: true, reasoning: "new page", factors: [] }));
+    const out = await evaluateAndGate(input, deps);
+    expect(out.gated).toBe(false);
+    expect(vi.mocked(deps.issuesSvc.addComment)).not.toHaveBeenCalled();
+    expect(vi.mocked(deps.approvalsSvc.create)).not.toHaveBeenCalled();
   });
 
   it("gates a high-risk change: blocks the issue, creates+links the approval, posts a card", async () => {
